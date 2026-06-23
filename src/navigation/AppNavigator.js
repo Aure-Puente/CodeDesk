@@ -1,23 +1,27 @@
+//Importaciones:
 import React, { useEffect, useMemo, useRef } from "react";
 import { Animated, Pressable, StyleSheet, View } from "react-native";
-import { NavigationContainer } from "@react-navigation/native";
+import {
+  NavigationContainer,
+  DefaultTheme as NavigationDefaultTheme,
+  DarkTheme as NavigationDarkTheme,
+} from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Text } from "react-native-paper";
-
 import HomeScreen from "../screens/HomeScreen";
 import TasksScreen from "../screens/TasksScreen";
 import ProjectsScreen from "../screens/ProjectsScreen";
 import PaymentsScreen from "../screens/PaymentsScreen";
 import MoreScreen from "../screens/MoreScreen";
-
 import CredentialsScreen from "../screens/CredentialsScreen";
 import DatabaseScreen from "../screens/DataBaseScreen";
 import NotesScreen from "../screens/NotesScreen";
 import StatsScreen from "../screens/StatsScreen";
 import ProfileScreen from "../screens/ProfileScreen";
 
+//JS:
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
@@ -131,12 +135,12 @@ function TabBarButton({
   );
 }
 
-function TabIconLabel({ routeName, color, focused, primary, isDarkMode, styles }) {
+function TabIconLabel({ routeName, color, focused, styles }) {
   let iconName = "circle-outline";
   let label = routeName;
 
   if (routeName === "Inicio") {
-    iconName = focused ? "view-dashboard" : "view-dashboard-outline";
+    iconName = focused ? "home-variant" : "home-variant-outline";
     label = "Inicio";
   }
 
@@ -148,39 +152,28 @@ function TabIconLabel({ routeName, color, focused, primary, isDarkMode, styles }
   }
 
   if (routeName === "Proyectos") {
-    iconName = focused ? "folder" : "folder-outline";
+    iconName = focused ? "view-grid" : "view-grid-outline";
     label = "Proyectos";
   }
 
   if (routeName === "Pagos") {
-    iconName = focused ? "cash-multiple" : "cash-multiple";
+    iconName = focused ? "wallet" : "wallet-outline";
     label = "Pagos";
   }
 
   if (routeName === "Más") {
-    iconName = focused
-      ? "dots-horizontal-circle"
-      : "dots-horizontal-circle-outline";
+    iconName = focused ? "dots-grid" : "dots-grid";
     label = "Más";
   }
 
   return (
     <View style={styles.tabContent}>
-      <View
-        style={[
-          styles.iconPill,
-          focused && {
-            backgroundColor: isDarkMode
-              ? hexToRgba(primary, 0.18)
-              : hexToRgba(primary, 0.12),
-            borderColor: isDarkMode
-              ? hexToRgba(primary, 0.28)
-              : hexToRgba(primary, 0.18),
-          },
-        ]}
-      >
-        <MaterialCommunityIcons name={iconName} size={27} color={color} />
-      </View>
+      <MaterialCommunityIcons
+        name={iconName}
+        size={31}
+        color={color}
+        style={styles.tabIcon}
+      />
 
       <Text
         style={[
@@ -202,19 +195,15 @@ function MoreStack({ theme, isDarkMode, setIsDarkMode }) {
   return (
     <Stack.Navigator
       screenOptions={{
-        headerStyle: {
-          backgroundColor: theme.colors.surface,
-        },
-        headerTintColor: theme.colors.text,
-        headerTitleStyle: {
-          fontWeight: "800",
-        },
+        headerShown: false,
+        animation: "none",
         contentStyle: {
           backgroundColor: theme.colors.background,
         },
+        navigationBarColor: theme.colors.background,
       }}
     >
-      <Stack.Screen name="MasHome" options={{ title: "Más" }}>
+      <Stack.Screen name="MasHome">
         {(props) => (
           <MoreScreen
             {...props}
@@ -225,23 +214,23 @@ function MoreStack({ theme, isDarkMode, setIsDarkMode }) {
         )}
       </Stack.Screen>
 
-      <Stack.Screen name="Credenciales" options={{ title: "Credenciales" }}>
+      <Stack.Screen name="Credenciales">
         {(props) => <CredentialsScreen {...props} theme={theme} />}
       </Stack.Screen>
 
-      <Stack.Screen name="BaseDeDatos" options={{ title: "Base de datos" }}>
+      <Stack.Screen name="BaseDeDatos">
         {(props) => <DatabaseScreen {...props} theme={theme} />}
       </Stack.Screen>
 
-      <Stack.Screen name="Notas" options={{ title: "Notas" }}>
+      <Stack.Screen name="Notas">
         {(props) => <NotesScreen {...props} theme={theme} />}
       </Stack.Screen>
 
-      <Stack.Screen name="Estadisticas" options={{ title: "Estadísticas" }}>
+      <Stack.Screen name="Estadisticas">
         {(props) => <StatsScreen {...props} theme={theme} />}
       </Stack.Screen>
 
-      <Stack.Screen name="Perfil" options={{ title: "Perfil" }}>
+      <Stack.Screen name="Perfil">
         {(props) => (
           <ProfileScreen
             {...props}
@@ -259,34 +248,56 @@ export default function AppNavigator({ theme, isDarkMode, setIsDarkMode }) {
   const primary = theme.colors.primary;
   const inactiveColor = theme.colors.secondary;
   const tabBackground = theme.colors.surface;
-  const tabBorder = theme.colors.outline;
+  const tabBorder = theme.colors.borderSoft || theme.colors.outline;
   const shadowColor = "#000000";
 
-  const primarySoft = isDarkMode
-    ? hexToRgba(primary, 0.18)
-    : hexToRgba(primary, 0.14);
+  const primarySoft =
+    theme.colors.primarySoft ||
+    (isDarkMode ? hexToRgba(primary, 0.14) : hexToRgba(primary, 0.1));
 
   const customStyles = useMemo(
     () =>
       createStyles({
         isDarkMode,
-        primary,
-        tabBackground,
-        tabBorder,
       }),
-    [isDarkMode, primary, tabBackground, tabBorder]
+    [isDarkMode]
   );
 
+  const navigationTheme = useMemo(() => {
+    const baseTheme = isDarkMode ? NavigationDarkTheme : NavigationDefaultTheme;
+
+    return {
+      ...baseTheme,
+      dark: isDarkMode,
+      colors: {
+        ...baseTheme.colors,
+        primary: theme.colors.primary,
+        background: theme.colors.background,
+        card: theme.colors.surface,
+        text: theme.colors.text,
+        border: theme.colors.borderSoft || theme.colors.outline,
+        notification: theme.colors.primary,
+      },
+    };
+  }, [isDarkMode, theme]);
+
   return (
-    <NavigationContainer>
+    <NavigationContainer theme={navigationTheme}>
       <Tab.Navigator
         initialRouteName="Inicio"
+        sceneContainerStyle={{
+          backgroundColor: theme.colors.background,
+        }}
         screenOptions={({ route }) => ({
           headerShown: false,
           tabBarActiveTintColor: primary,
           tabBarInactiveTintColor: inactiveColor,
           tabBarHideOnKeyboard: true,
           tabBarShowLabel: false,
+
+          sceneStyle: {
+            backgroundColor: theme.colors.background,
+          },
 
           tabBarStyle: {
             backgroundColor: tabBackground,
@@ -295,9 +306,9 @@ export default function AppNavigator({ theme, isDarkMode, setIsDarkMode }) {
             height: 110,
             paddingTop: 4,
             shadowColor,
-            shadowOpacity: isDarkMode ? 0.22 : 0.06,
-            shadowRadius: 12,
-            shadowOffset: { width: 0, height: -2 },
+            shadowOpacity: isDarkMode ? 0.28 : 0.08,
+            shadowRadius: 14,
+            shadowOffset: { width: 0, height: -3 },
             elevation: 10,
           },
 
@@ -319,8 +330,6 @@ export default function AppNavigator({ theme, isDarkMode, setIsDarkMode }) {
               routeName={route.name}
               color={color}
               focused={focused}
-              primary={primary}
-              isDarkMode={isDarkMode}
               styles={customStyles}
             />
           ),
@@ -357,16 +366,17 @@ export default function AppNavigator({ theme, isDarkMode, setIsDarkMode }) {
   );
 }
 
-function createStyles({ isDarkMode, primary, tabBackground, tabBorder }) {
+function createStyles({ isDarkMode }) {
   return StyleSheet.create({
     tabButtonBase: {
       flex: 1,
       alignItems: "center",
       justifyContent: "center",
+      overflow: "hidden",
     },
 
     tabButtonPressed: {
-      opacity: 0.95,
+      opacity: isDarkMode ? 0.9 : 0.94,
     },
 
     innerButtonWrap: {
@@ -380,9 +390,9 @@ function createStyles({ isDarkMode, primary, tabBackground, tabBorder }) {
     },
 
     rippleCircle: {
-      width: 82,
-      height: 70,
-      borderRadius: 26,
+      width: 58,
+      height: 58,
+      borderRadius: 999,
     },
 
     tabContent: {
@@ -391,23 +401,15 @@ function createStyles({ isDarkMode, primary, tabBackground, tabBorder }) {
       minWidth: 72,
     },
 
-    iconPill: {
-      minWidth: 46,
-      height: 36,
-      paddingHorizontal: 10,
-      borderRadius: 999,
-      borderWidth: 1,
-      borderColor: "transparent",
-      alignItems: "center",
-      justifyContent: "center",
-      marginBottom: 4,
-      backgroundColor: "transparent",
+    tabIcon: {
+      marginBottom: 5,
     },
 
     customLabel: {
       fontSize: 11.5,
       lineHeight: 15,
       marginBottom: 6,
+      letterSpacing: -0.1,
     },
   });
 }

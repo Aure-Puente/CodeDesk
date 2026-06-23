@@ -1,3 +1,4 @@
+//Importaciones:
 import React, { useEffect, useMemo, useState } from "react";
 import { Alert, Image, Modal, ScrollView, StyleSheet, View } from "react-native";
 import {
@@ -5,10 +6,12 @@ import {
   Button,
   Card,
   Chip,
+  Divider,
   IconButton,
   Searchbar,
   Text,
   TextInput,
+  TouchableRipple,
 } from "react-native-paper";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
@@ -28,15 +31,28 @@ import {
 import { db } from "../firebase/firebaseConfig";
 import { useAuth } from "../context/AuthContext";
 
-const CATEGORIES = [
-  "General",
-  "Idea",
-  "Bug",
-  "Código",
-  "Cliente",
-  "Firebase",
-  "Comando",
-];
+//JS:
+const hexToRgba = (hex, alpha = 1) => {
+  const clean = String(hex || "").replace("#", "");
+
+  const full =
+    clean.length === 3
+      ? clean
+          .split("")
+          .map((c) => c + c)
+          .join("")
+      : clean;
+
+  const r = parseInt(full.slice(0, 2), 16);
+  const g = parseInt(full.slice(2, 4), 16);
+  const b = parseInt(full.slice(4, 6), 16);
+
+  if ([r, g, b].some((value) => Number.isNaN(value))) {
+    return `rgba(37, 99, 235, ${alpha})`;
+  }
+
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+};
 
 export default function NotesScreen({ theme }) {
   const { user } = useAuth();
@@ -46,16 +62,18 @@ export default function NotesScreen({ theme }) {
   const [loading, setLoading] = useState(true);
 
   const [modalVisible, setModalVisible] = useState(false);
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+
   const [editingNote, setEditingNote] = useState(null);
+  const [noteToDelete, setNoteToDelete] = useState(null);
 
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
-  const [category, setCategory] = useState("General");
   const [projectId, setProjectId] = useState(null);
 
   const [search, setSearch] = useState("");
-  const [filterCategory, setFilterCategory] = useState("Todas");
   const [filterProject, setFilterProject] = useState("todos");
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   useEffect(() => {
     if (!user?.uid) return;
@@ -87,10 +105,16 @@ export default function NotesScreen({ theme }) {
     });
 
     const unsubscribeProjects = onSnapshot(projectsQuery, (snapshot) => {
-      const data = snapshot.docs.map((document) => ({
-        id: document.id,
-        ...document.data(),
-      }));
+      const data = snapshot.docs
+        .map((document) => ({
+          id: document.id,
+          ...document.data(),
+        }))
+        .sort((a, b) => {
+          const nameA = String(a.name || "").toLowerCase();
+          const nameB = String(b.name || "").toLowerCase();
+          return nameA.localeCompare(nameB);
+        });
 
       setProjects(data);
     });
@@ -101,11 +125,17 @@ export default function NotesScreen({ theme }) {
     };
   }, [user]);
 
+  const activeFiltersCount = useMemo(() => {
+    let count = 0;
+
+    if (search.trim()) count += 1;
+    if (filterProject !== "todos") count += 1;
+
+    return count;
+  }, [search, filterProject]);
+
   const filteredNotes = useMemo(() => {
     return notes.filter((note) => {
-      const matchesCategory =
-        filterCategory === "Todas" ? true : note.category === filterCategory;
-
       const matchesProject =
         filterProject === "todos"
           ? true
@@ -119,15 +149,14 @@ export default function NotesScreen({ theme }) {
 
       const matchesSearch = text.includes(search.toLowerCase());
 
-      return matchesCategory && matchesProject && matchesSearch;
+      return matchesProject && matchesSearch;
     });
-  }, [notes, filterCategory, filterProject, search]);
+  }, [notes, filterProject, search]);
 
   function resetForm() {
     setEditingNote(null);
     setTitle("");
     setContent("");
-    setCategory("General");
     setProjectId(null);
   }
 
@@ -140,9 +169,18 @@ export default function NotesScreen({ theme }) {
     setEditingNote(note);
     setTitle(note.title || "");
     setContent(note.content || "");
-    setCategory(note.category || "General");
     setProjectId(note.projectId || null);
     setModalVisible(true);
+  }
+
+  function openDeleteModal(note) {
+    setNoteToDelete(note);
+    setDeleteModalVisible(true);
+  }
+
+  function closeDeleteModal() {
+    setNoteToDelete(null);
+    setDeleteModalVisible(false);
   }
 
   async function handleSaveNote() {
@@ -158,7 +196,7 @@ export default function NotesScreen({ theme }) {
         userId: user.uid,
         title: title.trim(),
         content: content.trim(),
-        category,
+        category: "General",
         projectId: projectId || null,
         projectName: selectedProject?.name || null,
         projectColor: selectedProject?.color || null,
@@ -183,17 +221,16 @@ export default function NotesScreen({ theme }) {
     }
   }
 
-  function handleDeleteNote(note) {
-    Alert.alert("Eliminar nota", `¿Eliminar "${note.title || "Sin título"}"?`, [
-      { text: "Cancelar", style: "cancel" },
-      {
-        text: "Eliminar",
-        style: "destructive",
-        onPress: async () => {
-          await deleteDoc(doc(db, "notes", note.id));
-        },
-      },
-    ]);
+  async function confirmDeleteNote() {
+    if (!noteToDelete?.id) return;
+
+    try {
+      await deleteDoc(doc(db, "notes", noteToDelete.id));
+      closeDeleteModal();
+    } catch (error) {
+      console.log(error);
+      Alert.alert("Error", "No se pudo eliminar la nota.");
+    }
   }
 
   async function copyNote(note) {
@@ -208,35 +245,148 @@ export default function NotesScreen({ theme }) {
     Alert.alert("Copiado", "La nota fue copiada al portapapeles.");
   }
 
-  function getCategoryIcon(value) {
-    if (value === "Idea") return "lightbulb-outline";
-    if (value === "Bug") return "bug-outline";
-    if (value === "Código") return "code-tags";
-    if (value === "Cliente") return "account-tie-outline";
-    if (value === "Firebase") return "firebase";
-    if (value === "Comando") return "console-line";
-    return "note-text-outline";
+  function resetFilters() {
+    setSearch("");
+    setFilterProject("todos");
   }
 
-  function ProjectBadge({ item }) {
+  function ProjectBadge({ item, size = 52 }) {
     const color = item.projectColor || theme.colors.primary;
+    const logoUrl = item.projectLogoUrl;
+
+    const softColor = theme.dark
+      ? hexToRgba(color, 0.18)
+      : hexToRgba(color, 0.1);
 
     return (
-      <View style={[styles.projectBadge, { backgroundColor: color }]}>
-        {item.projectLogoUrl ? (
-          <Image source={{ uri: item.projectLogoUrl }} style={styles.logo} />
+      <View
+        style={[
+          styles.projectBadge,
+          {
+            width: size,
+            height: size,
+            borderRadius: size / 3,
+            backgroundColor: softColor,
+          },
+        ]}
+      >
+        {logoUrl ? (
+          <Image source={{ uri: logoUrl }} style={styles.logo} />
         ) : item.projectName ? (
-          <Text style={styles.projectLetter}>
+          <Text style={[styles.projectLetter, { color }]}>
             {item.projectName.charAt(0).toUpperCase()}
           </Text>
         ) : (
           <MaterialCommunityIcons
             name="note-text-outline"
             size={24}
-            color="#FFFFFF"
+            color={theme.colors.primary}
           />
         )}
       </View>
+    );
+  }
+
+  function renderNoteCard(note) {
+    return (
+      <Card
+        key={note.id}
+        mode="contained"
+        style={[
+          styles.noteCard,
+          {
+            backgroundColor: theme.colors.surface,
+            borderColor: theme.colors.borderSoft,
+          },
+        ]}
+      >
+        <View style={styles.noteCardContent}>
+          <View style={styles.noteHeader}>
+            <ProjectBadge item={note} />
+
+            <View style={styles.noteInfo}>
+              <Text
+                style={[styles.noteTitle, { color: theme.colors.text }]}
+                numberOfLines={2}
+              >
+                {note.title || "Sin título"}
+              </Text>
+
+              <Text
+                style={[styles.noteMeta, { color: theme.colors.secondary }]}
+                numberOfLines={1}
+              >
+                {note.projectName || "Sin proyecto"}
+              </Text>
+            </View>
+          </View>
+
+          {!!note.content && (
+            <View
+              style={[
+                styles.contentBox,
+                {
+                  backgroundColor: theme.colors.surfaceSoft,
+                  borderColor: theme.colors.borderSoft,
+                },
+              ]}
+            >
+              <Text
+                style={[styles.noteContent, { color: theme.colors.secondary }]}
+                numberOfLines={5}
+              >
+                {note.content}
+              </Text>
+            </View>
+          )}
+
+          <Divider
+            style={[
+              styles.cardDivider,
+              {
+                backgroundColor: theme.colors.borderSoft,
+              },
+            ]}
+          />
+
+          <View style={styles.actionsRow}>
+            <Button
+              mode="contained-tonal"
+              icon="content-copy"
+              textColor={theme.colors.primary}
+              buttonColor={theme.colors.primarySoft}
+              style={styles.copyButton}
+              contentStyle={styles.copyButtonContent}
+              labelStyle={styles.copyButtonLabel}
+              onPress={() => copyNote(note)}
+            >
+              Copiar
+            </Button>
+
+            <View style={styles.iconActions}>
+              <IconButton
+                icon="pencil-outline"
+                size={20}
+                mode="contained-tonal"
+                iconColor={theme.colors.primary}
+                containerColor={theme.colors.primarySoft}
+                style={styles.actionIcon}
+                onPress={() => openEditModal(note)}
+              />
+
+              <IconButton
+                icon="delete-outline"
+                size={20}
+                mode="contained-tonal"
+                iconColor={theme.colors.danger}
+                containerColor={theme.colors.dangerSoft}
+                style={styles.actionIcon}
+                onPress={() => openDeleteModal(note)}
+              />
+            </View>
+          </View>
+        </View>
+      </Card>
     );
   }
 
@@ -244,182 +394,255 @@ export default function NotesScreen({ theme }) {
     <ScrollView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
       contentContainerStyle={styles.content}
+      showsVerticalScrollIndicator={false}
     >
-      <Text style={[styles.subtitle, { color: theme.colors.secondary }]}>
-        Guardá ideas, bugs, comandos, recordatorios y apuntes rápidos.
-      </Text>
+      <View style={styles.header}>
+        <View style={styles.titleRow}>
+          <View
+            style={[
+              styles.sectionMarker,
+              { backgroundColor: theme.colors.primary },
+            ]}
+          />
 
-      <Button mode="contained" style={styles.button} onPress={openCreateModal}>
+        <Text
+          style={[styles.title, { color: theme.colors.text }]}
+        >
+          Notas
+        </Text>
+        </View>
+
+        <Text style={[styles.subtitle, { color: theme.colors.secondary }]}>
+          Guardá ideas, bugs, comandos, recordatorios y apuntes rápidos.
+        </Text>
+      </View>
+
+      <Button
+        mode="contained"
+        icon="plus"
+        style={styles.createButton}
+        contentStyle={styles.createButtonContent}
+        labelStyle={styles.createButtonLabel}
+        onPress={openCreateModal}
+      >
         Nueva nota
       </Button>
 
-      <Searchbar
-        placeholder="Buscar notas..."
-        value={search}
-        onChangeText={setSearch}
-        style={[styles.search, { backgroundColor: theme.colors.surface }]}
-      />
-
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filters}>
-        {["Todas", ...CATEGORIES].map((item) => (
-          <Chip
-            key={item}
-            selected={filterCategory === item}
-            onPress={() => setFilterCategory(item)}
-            style={styles.filterChip}
-            icon={item === "Todas" ? "filter-outline" : getCategoryIcon(item)}
-          >
-            {item}
-          </Chip>
-        ))}
-      </ScrollView>
-
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filters}>
-        <Chip
-          selected={filterProject === "todos"}
-          onPress={() => setFilterProject("todos")}
-          style={styles.filterChip}
+      <Card
+        mode="contained"
+        style={[
+          styles.filtersCard,
+          {
+            backgroundColor: theme.colors.surface,
+            borderColor: theme.colors.borderSoft,
+          },
+        ]}
+      >
+        <TouchableRipple
+          rippleColor={theme.colors.primarySoft}
+          onPress={() => setFiltersOpen((prev) => !prev)}
         >
-          Todos
-        </Chip>
+          <View style={styles.filtersHeader}>
+            <View
+              style={[
+                styles.filtersIconBox,
+                { backgroundColor: theme.colors.primarySoft },
+              ]}
+            >
+              <MaterialCommunityIcons
+                name="filter-variant"
+                size={20}
+                color={theme.colors.primary}
+              />
+            </View>
 
-        <Chip
-          selected={filterProject === "sinProyecto"}
-          onPress={() => setFilterProject("sinProyecto")}
-          style={styles.filterChip}
-        >
-          Sin proyecto
-        </Chip>
+            <View style={styles.filtersTextBox}>
+              <Text style={[styles.filtersTitle, { color: theme.colors.text }]}>
+                Filtros
+              </Text>
 
-        {projects.map((project) => (
-          <Chip
-            key={project.id}
-            selected={filterProject === project.id}
-            onPress={() => setFilterProject(project.id)}
-            style={styles.filterChip}
-            icon="folder-outline"
-          >
-            {project.name}
-          </Chip>
-        ))}
-      </ScrollView>
+              <Text
+                style={[styles.filtersSubtitle, { color: theme.colors.secondary }]}
+              >
+                {activeFiltersCount > 0
+                  ? `${activeFiltersCount} filtro activo`
+                  : "Buscar por texto o proyecto"}
+              </Text>
+            </View>
+
+            {activeFiltersCount > 0 && (
+              <View
+                style={[
+                  styles.activeBadge,
+                  { backgroundColor: theme.colors.primarySoft },
+                ]}
+              >
+                <Text
+                  style={[styles.activeBadgeText, { color: theme.colors.primary }]}
+                >
+                  {activeFiltersCount}
+                </Text>
+              </View>
+            )}
+
+            <MaterialCommunityIcons
+              name={filtersOpen ? "chevron-up" : "chevron-down"}
+              size={24}
+              color={theme.colors.secondary}
+            />
+          </View>
+        </TouchableRipple>
+
+        {filtersOpen && (
+          <View style={styles.filtersBody}>
+            <Searchbar
+              placeholder="Buscar notas..."
+              value={search}
+              onChangeText={setSearch}
+              style={[
+                styles.search,
+                {
+                  backgroundColor: theme.colors.surfaceSoft,
+                  borderColor: theme.colors.borderSoft,
+                },
+              ]}
+              inputStyle={[styles.searchInput, { color: theme.colors.text }]}
+              iconColor={theme.colors.secondary}
+              placeholderTextColor={theme.colors.secondary}
+            />
+
+            <FormSection title="Proyecto" theme={theme} />
+
+            <View style={styles.optionWrap}>
+              <ProjectFilterChip
+                label="Todos"
+                icon="format-list-bulleted"
+                selected={filterProject === "todos"}
+                color={theme.colors.primary}
+                theme={theme}
+                onPress={() => setFilterProject("todos")}
+              />
+
+              <ProjectFilterChip
+                label="Sin proyecto"
+                icon="account-outline"
+                selected={filterProject === "sinProyecto"}
+                color={theme.colors.secondary}
+                theme={theme}
+                onPress={() => setFilterProject("sinProyecto")}
+              />
+
+              {projects.map((project) => (
+                <ProjectFilterChip
+                  key={project.id}
+                  label={project.name}
+                  icon="folder-outline"
+                  selected={filterProject === project.id}
+                  color={project.color || theme.colors.primary}
+                  theme={theme}
+                  onPress={() => setFilterProject(project.id)}
+                />
+              ))}
+            </View>
+
+            {activeFiltersCount > 0 && (
+              <Button
+                mode="contained-tonal"
+                icon="filter-remove-outline"
+                style={styles.clearFiltersButton}
+                contentStyle={styles.clearFiltersButtonContent}
+                labelStyle={styles.clearFiltersButtonLabel}
+                onPress={resetFilters}
+              >
+                Limpiar filtros
+              </Button>
+            )}
+          </View>
+        )}
+      </Card>
 
       {loading ? (
-        <ActivityIndicator color={theme.colors.primary} />
+        <View style={styles.loadingBox}>
+          <ActivityIndicator color={theme.colors.primary} />
+        </View>
       ) : filteredNotes.length === 0 ? (
-        <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
-          <Card.Content>
-            <Text style={[styles.title, { color: theme.colors.text }]}>
+        <Card
+          mode="contained"
+          style={[
+            styles.emptyCard,
+            {
+              backgroundColor: theme.colors.surface,
+              borderColor: theme.colors.borderSoft,
+            },
+          ]}
+        >
+          <View style={styles.emptyContent}>
+            <View
+              style={[
+                styles.emptyIconBox,
+                { backgroundColor: theme.colors.primarySoft },
+              ]}
+            >
+              <MaterialCommunityIcons
+                name="note-plus-outline"
+                size={27}
+                color={theme.colors.primary}
+              />
+            </View>
+
+            <Text style={[styles.emptyTitle, { color: theme.colors.text }]}>
               Sin notas para mostrar
             </Text>
 
-            <Text style={{ color: theme.colors.secondary }}>
+            <Text style={[styles.emptyText, { color: theme.colors.secondary }]}>
               Agregá una nota rápida para ideas, bugs o comandos útiles.
             </Text>
-          </Card.Content>
+
+            <Button
+              mode="contained"
+              icon="plus"
+              style={styles.emptyButton}
+              onPress={openCreateModal}
+            >
+              Nueva nota
+            </Button>
+          </View>
         </Card>
       ) : (
-        <View style={styles.list}>
-          {filteredNotes.map((note) => {
-            const accentColor = note.projectColor || theme.colors.primary;
-
-            return (
-              <Card
-                key={note.id}
-                style={[
-                  styles.noteCard,
-                  {
-                    backgroundColor: theme.colors.surface,
-                    borderLeftColor: accentColor,
-                    borderLeftWidth: note.projectId ? 5 : 0,
-                  },
-                ]}
-              >
-                <Card.Content>
-                  <View style={styles.noteHeader}>
-                    <ProjectBadge item={note} />
-
-                    <View style={styles.noteInfo}>
-                      <Text
-                        style={[styles.noteTitle, { color: theme.colors.text }]}
-                        numberOfLines={1}
-                      >
-                        {note.title || "Sin título"}
-                      </Text>
-
-                      <View style={styles.chipsRow}>
-                        <Chip compact icon={getCategoryIcon(note.category)}>
-                          {note.category || "General"}
-                        </Chip>
-
-                        <Chip
-                          compact
-                          icon={note.projectId ? "folder-outline" : "account-outline"}
-                          style={
-                            note.projectId
-                              ? { backgroundColor: accentColor + "22" }
-                              : undefined
-                          }
-                          textStyle={
-                            note.projectId
-                              ? { color: accentColor, fontWeight: "800" }
-                              : undefined
-                          }
-                        >
-                          {note.projectName || "Sin proyecto"}
-                        </Chip>
-                      </View>
-                    </View>
-                  </View>
-
-                  {!!note.content && (
-                    <Text
-                      style={[styles.noteContent, { color: theme.colors.secondary }]}
-                      numberOfLines={4}
-                    >
-                      {note.content}
-                    </Text>
-                  )}
-
-                  <View style={styles.actionsRow}>
-                    <Button mode="text" icon="content-copy" onPress={() => copyNote(note)}>
-                      Copiar
-                    </Button>
-
-                    <Button
-                      mode="text"
-                      icon="pencil-outline"
-                      onPress={() => openEditModal(note)}
-                    >
-                      Editar
-                    </Button>
-
-                    <Button
-                      mode="text"
-                      icon="delete-outline"
-                      textColor="#DC2626"
-                      onPress={() => handleDeleteNote(note)}
-                    >
-                      Eliminar
-                    </Button>
-                  </View>
-                </Card.Content>
-              </Card>
-            );
-          })}
-        </View>
+        <View style={styles.list}>{filteredNotes.map(renderNoteCard)}</View>
       )}
 
       <Modal visible={modalVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
-          <View style={[styles.modal, { backgroundColor: theme.colors.surface }]}>
+          <View
+            style={[
+              styles.modal,
+              {
+                backgroundColor: theme.colors.surface,
+                borderColor: theme.colors.borderSoft,
+              },
+            ]}
+          >
+            <View style={styles.modalHandle} />
+
             <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: theme.colors.text }]}>
-                {editingNote ? "Editar nota" : "Nueva nota"}
-              </Text>
+              <View style={styles.modalTitleBox}>
+                <Text style={[styles.modalTitle, { color: theme.colors.text }]}>
+                  {editingNote ? "Editar nota" : "Nueva nota"}
+                </Text>
+
+                <Text
+                  style={[styles.modalSubtitle, { color: theme.colors.secondary }]}
+                >
+                  Guardá una idea, comando, bug o recordatorio rápido.
+                </Text>
+              </View>
 
               <IconButton
                 icon="close"
+                size={21}
+                iconColor={theme.colors.secondary}
+                style={styles.closeButton}
                 onPress={() => {
                   resetForm();
                   setModalVisible(false);
@@ -434,50 +657,31 @@ export default function NotesScreen({ theme }) {
                 onChangeText={setTitle}
                 mode="outlined"
                 style={styles.input}
+                outlineStyle={styles.inputOutline}
               />
 
-              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-                Proyecto relacionado
-              </Text>
+              <FormSection title="Proyecto relacionado" theme={theme} />
 
               <View style={styles.optionWrap}>
-                <Chip
-                  selected={!projectId}
-                  onPress={() => setProjectId(null)}
-                  style={styles.optionChip}
+                <ProjectOptionChip
+                  label="Sin proyecto"
                   icon="account-outline"
-                >
-                  Sin proyecto
-                </Chip>
+                  selected={!projectId}
+                  color={theme.colors.secondary}
+                  theme={theme}
+                  onPress={() => setProjectId(null)}
+                />
 
                 {projects.map((project) => (
-                  <Chip
+                  <ProjectOptionChip
                     key={project.id}
-                    selected={projectId === project.id}
-                    onPress={() => setProjectId(project.id)}
-                    style={styles.optionChip}
+                    label={project.name}
                     icon="folder-outline"
-                  >
-                    {project.name}
-                  </Chip>
-                ))}
-              </View>
-
-              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-                Categoría
-              </Text>
-
-              <View style={styles.optionWrap}>
-                {CATEGORIES.map((item) => (
-                  <Chip
-                    key={item}
-                    selected={category === item}
-                    onPress={() => setCategory(item)}
-                    style={styles.optionChip}
-                    icon={getCategoryIcon(item)}
-                  >
-                    {item}
-                  </Chip>
+                    selected={projectId === project.id}
+                    color={project.color || theme.colors.primary}
+                    theme={theme}
+                    onPress={() => setProjectId(project.id)}
+                  />
                 ))}
               </View>
 
@@ -489,81 +693,467 @@ export default function NotesScreen({ theme }) {
                 multiline
                 numberOfLines={8}
                 style={styles.textArea}
+                outlineStyle={styles.inputOutline}
               />
 
-              <Button mode="contained" style={styles.saveButton} onPress={handleSaveNote}>
+              <Button
+                mode="contained"
+                icon={editingNote ? "content-save-outline" : "plus"}
+                style={styles.saveButton}
+                contentStyle={styles.saveButtonContent}
+                labelStyle={styles.saveButtonLabel}
+                onPress={handleSaveNote}
+              >
                 {editingNote ? "Guardar cambios" : "Guardar nota"}
               </Button>
             </ScrollView>
           </View>
         </View>
       </Modal>
+
+      <DeleteModal
+        visible={deleteModalVisible}
+        theme={theme}
+        title="Eliminar nota"
+        text="¿Seguro que querés eliminar esta nota? Esta acción no se puede deshacer."
+        previewTitle={noteToDelete?.title || "Sin título"}
+        previewSubtitle={noteToDelete?.projectName || "Sin proyecto"}
+        icon="note-remove-outline"
+        onCancel={closeDeleteModal}
+        onConfirm={confirmDeleteNote}
+      />
     </ScrollView>
   );
 }
 
+function ProjectFilterChip({ label, icon, selected, color, theme, onPress }) {
+  const bg = selected
+    ? theme.dark
+      ? hexToRgba(color, 0.18)
+      : hexToRgba(color, 0.09)
+    : theme.colors.surfaceSoft;
+
+  return (
+    <Chip
+      compact
+      icon={icon}
+      selected={selected}
+      onPress={onPress}
+      style={[
+        styles.filterChip,
+        {
+          backgroundColor: bg,
+          borderColor: selected
+            ? hexToRgba(color, theme.dark ? 0.34 : 0.18)
+            : theme.colors.borderSoft,
+        },
+      ]}
+      textStyle={[
+        styles.filterChipText,
+        {
+          color: selected ? color : theme.colors.secondary,
+        },
+      ]}
+    >
+      {label}
+    </Chip>
+  );
+}
+
+function ProjectOptionChip({ label, icon, selected, color, theme, onPress }) {
+  const bg = selected
+    ? theme.dark
+      ? hexToRgba(color, 0.18)
+      : hexToRgba(color, 0.09)
+    : theme.colors.surfaceSoft;
+
+  return (
+    <Chip
+      compact
+      icon={icon}
+      selected={selected}
+      onPress={onPress}
+      style={[
+        styles.optionChip,
+        {
+          backgroundColor: bg,
+          borderColor: selected
+            ? hexToRgba(color, theme.dark ? 0.34 : 0.18)
+            : theme.colors.borderSoft,
+        },
+      ]}
+      textStyle={[
+        styles.optionChipText,
+        {
+          color: selected ? color : theme.colors.secondary,
+        },
+      ]}
+    >
+      {label}
+    </Chip>
+  );
+}
+
+function FormSection({ title, theme }) {
+  return (
+    <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+      {title}
+    </Text>
+  );
+}
+
+function DeleteModal({
+  visible,
+  theme,
+  title,
+  text,
+  previewTitle,
+  previewSubtitle,
+  icon,
+  onCancel,
+  onConfirm,
+}) {
+  return (
+    <Modal visible={visible} animationType="fade" transparent>
+      <View style={styles.deleteOverlay}>
+        <Card
+          mode="contained"
+          style={[
+            styles.deleteModal,
+            {
+              backgroundColor: theme.colors.surface,
+              borderColor: theme.colors.borderSoft,
+            },
+          ]}
+        >
+          <View style={styles.deleteContent}>
+            <View
+              style={[
+                styles.deleteIconBox,
+                { backgroundColor: theme.colors.dangerSoft },
+              ]}
+            >
+              <MaterialCommunityIcons
+                name={icon}
+                size={29}
+                color={theme.colors.danger}
+              />
+            </View>
+
+            <Text style={[styles.deleteTitle, { color: theme.colors.text }]}>
+              {title}
+            </Text>
+
+            <Text style={[styles.deleteText, { color: theme.colors.secondary }]}>
+              {text}
+            </Text>
+
+            {!!previewTitle && (
+              <View
+                style={[
+                  styles.deletePreview,
+                  {
+                    backgroundColor: theme.colors.surfaceSoft,
+                    borderColor: theme.colors.borderSoft,
+                  },
+                ]}
+              >
+                <Text
+                  style={[styles.deletePreviewTitle, { color: theme.colors.text }]}
+                  numberOfLines={2}
+                >
+                  {previewTitle}
+                </Text>
+
+                {!!previewSubtitle && (
+                  <Text
+                    style={[
+                      styles.deletePreviewSubtitle,
+                      { color: theme.colors.secondary },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {previewSubtitle}
+                  </Text>
+                )}
+              </View>
+            )}
+
+            <View style={styles.deleteActions}>
+              <Button
+                mode="contained-tonal"
+                style={styles.cancelDeleteButton}
+                contentStyle={styles.deleteButtonContent}
+                labelStyle={styles.deleteButtonLabel}
+                onPress={onCancel}
+              >
+                Cancelar
+              </Button>
+
+              <Button
+                mode="contained"
+                icon="delete-outline"
+                buttonColor={theme.colors.danger}
+                textColor="#FFFFFF"
+                style={styles.confirmDeleteButton}
+                contentStyle={styles.deleteButtonContent}
+                labelStyle={styles.deleteButtonLabel}
+                onPress={onConfirm}
+              >
+                Eliminar
+              </Button>
+            </View>
+          </View>
+        </Card>
+      </View>
+    </Modal>
+  );
+}
+
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container: {
+    flex: 1,
+  },
 
   content: {
-    padding: 20,
+    paddingHorizontal: 20,
+    paddingTop: 6,
     paddingBottom: 135,
   },
 
-  subtitle: {
+  header: {
     marginBottom: 18,
+    width: "100%",
   },
 
-  button: {
-    borderRadius: 16,
+  titleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    width: "100%",
+  },
+
+  sectionMarker: {
+    width: 5,
+    height: 28,
+    borderRadius: 999,
+    marginRight: 10,
+  },
+
+  title: {
+    fontSize: 24,
+    lineHeight: 30,
+    fontWeight: "900",
+    letterSpacing: -0.4,
+    minWidth: 100,
+  },
+
+  subtitle: {
+    marginTop: 7,
+    fontSize: 13.5,
+    lineHeight: 19,
+    maxWidth: 340,
+  },
+
+  createButton: {
+    width: "100%",
+    borderRadius: 18,
+    elevation: 0,
     marginBottom: 14,
+  },
+
+  createButtonContent: {
+    height: 50,
+  },
+
+  createButtonLabel: {
+    fontSize: 14,
+    fontWeight: "900",
+  },
+
+  filtersCard: {
+    borderRadius: 24,
+    borderWidth: 1,
+    elevation: 0,
+    overflow: "hidden",
+    marginBottom: 14,
+  },
+
+  filtersHeader: {
+    minHeight: 70,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+  },
+
+  filtersIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+  },
+
+  filtersTextBox: {
+    flex: 1,
+    paddingRight: 8,
+  },
+
+  filtersTitle: {
+    fontSize: 15,
+    fontWeight: "900",
+    letterSpacing: -0.2,
+  },
+
+  filtersSubtitle: {
+    marginTop: 2,
+    fontSize: 12.5,
+    lineHeight: 17,
+  },
+
+  activeBadge: {
+    minWidth: 26,
+    height: 26,
+    borderRadius: 999,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 8,
+    paddingHorizontal: 8,
+  },
+
+  activeBadgeText: {
+    fontSize: 12,
+    fontWeight: "900",
+  },
+
+  filtersBody: {
+    paddingHorizontal: 14,
+    paddingBottom: 14,
   },
 
   search: {
     borderRadius: 18,
+    borderWidth: 1,
+    elevation: 0,
     marginBottom: 12,
   },
 
-  filters: {
+  searchInput: {
+    fontSize: 14,
+  },
+
+  clearFiltersButton: {
+    borderRadius: 16,
+    elevation: 0,
+    marginTop: 2,
+  },
+
+  clearFiltersButtonContent: {
+    height: 42,
+  },
+
+  clearFiltersButtonLabel: {
+    fontSize: 13,
+    fontWeight: "900",
+  },
+
+  sectionTitle: {
+    fontSize: 14,
+    fontWeight: "900",
+    marginTop: 4,
     marginBottom: 10,
   },
 
+  optionWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 14,
+  },
+
   filterChip: {
-    marginRight: 8,
+    borderWidth: 1,
+    borderRadius: 999,
+    marginBottom: 2,
   },
 
-  card: {
-    borderRadius: 22,
+  filterChipText: {
+    fontSize: 12,
+    fontWeight: "900",
   },
 
-  title: {
+  loadingBox: {
+    minHeight: 180,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  emptyCard: {
+    borderRadius: 24,
+    borderWidth: 1,
+    elevation: 0,
+    overflow: "hidden",
+  },
+
+  emptyContent: {
+    alignItems: "center",
+    padding: 22,
+  },
+
+  emptyIconBox: {
+    width: 54,
+    height: 54,
+    borderRadius: 19,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 14,
+  },
+
+  emptyTitle: {
     fontSize: 18,
-    fontWeight: "800",
-    marginBottom: 6,
+    fontWeight: "900",
+    letterSpacing: -0.25,
+    textAlign: "center",
+  },
+
+  emptyText: {
+    marginTop: 6,
+    marginBottom: 16,
+    fontSize: 13,
+    lineHeight: 19,
+    textAlign: "center",
+  },
+
+  emptyButton: {
+    borderRadius: 16,
   },
 
   list: {
-    gap: 14,
+    gap: 12,
   },
 
   noteCard: {
-    borderRadius: 22,
+    borderRadius: 24,
+    borderWidth: 1,
+    elevation: 0,
     overflow: "hidden",
+  },
+
+  noteCardContent: {
+    padding: 14,
   },
 
   noteHeader: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
   },
 
   projectBadge: {
-    width: 52,
-    height: 52,
-    borderRadius: 18,
     justifyContent: "center",
     alignItems: "center",
     overflow: "hidden",
+    marginRight: 12,
   },
 
   logo: {
@@ -572,7 +1162,6 @@ const styles = StyleSheet.create({
   },
 
   projectLetter: {
-    color: "#FFFFFF",
     fontSize: 22,
     fontWeight: "900",
   },
@@ -584,53 +1173,126 @@ const styles = StyleSheet.create({
   noteTitle: {
     fontSize: 17,
     fontWeight: "900",
-    marginBottom: 6,
+    letterSpacing: -0.25,
+    lineHeight: 22,
   },
 
-  chipsRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
+  noteMeta: {
+    marginTop: 3,
+    fontSize: 12.5,
+    fontWeight: "700",
+  },
+
+  contentBox: {
+    marginTop: 13,
+    borderRadius: 18,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
   },
 
   noteContent: {
-    marginTop: 12,
+    fontSize: 13,
     lineHeight: 20,
   },
 
+  cardDivider: {
+    height: 1,
+    marginTop: 14,
+    marginBottom: 10,
+  },
+
   actionsRow: {
+    minHeight: 42,
     flexDirection: "row",
-    justifyContent: "flex-end",
-    flexWrap: "wrap",
-    marginTop: 12,
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+
+  copyButton: {
+    borderRadius: 999,
+    elevation: 0,
+  },
+
+  copyButtonContent: {
+    height: 38,
+  },
+
+  copyButtonLabel: {
+    fontSize: 12.5,
+    fontWeight: "900",
+  },
+
+  iconActions: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  actionIcon: {
+    margin: 0,
+    marginLeft: 4,
   },
 
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.35)",
+    backgroundColor: "rgba(0,0,0,0.38)",
     justifyContent: "flex-end",
   },
 
   modal: {
     maxHeight: "92%",
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    padding: 20,
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+    borderWidth: 1,
+    borderBottomWidth: 0,
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+    paddingTop: 10,
+  },
+
+  modalHandle: {
+    alignSelf: "center",
+    width: 44,
+    height: 5,
+    borderRadius: 999,
+    backgroundColor: "rgba(148,163,184,0.45)",
+    marginBottom: 14,
   },
 
   modalHeader: {
     flexDirection: "row",
+    alignItems: "flex-start",
     justifyContent: "space-between",
-    alignItems: "center",
+    marginBottom: 16,
+  },
+
+  modalTitleBox: {
+    flex: 1,
+    paddingRight: 10,
   },
 
   modalTitle: {
     fontSize: 22,
     fontWeight: "900",
+    letterSpacing: -0.4,
+  },
+
+  modalSubtitle: {
+    marginTop: 3,
+    fontSize: 13,
+    lineHeight: 18,
+  },
+
+  closeButton: {
+    margin: 0,
   },
 
   input: {
     marginBottom: 12,
+  },
+
+  inputOutline: {
+    borderRadius: 16,
   },
 
   textArea: {
@@ -638,26 +1300,122 @@ const styles = StyleSheet.create({
     minHeight: 180,
   },
 
-  sectionTitle: {
-    fontWeight: "800",
-    marginTop: 8,
-    marginBottom: 10,
-  },
-
-  optionWrap: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    marginBottom: 14,
-  },
-
   optionChip: {
-    marginBottom: 4,
+    borderWidth: 1,
+    borderRadius: 999,
+    marginBottom: 2,
+  },
+
+  optionChipText: {
+    fontSize: 12,
+    fontWeight: "900",
   },
 
   saveButton: {
-    borderRadius: 16,
+    borderRadius: 18,
     marginTop: 12,
     marginBottom: 10,
+    elevation: 0,
+  },
+
+  saveButtonContent: {
+    height: 50,
+  },
+
+  saveButtonLabel: {
+    fontSize: 14,
+    fontWeight: "900",
+  },
+
+  deleteOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.42)",
+    justifyContent: "center",
+    paddingHorizontal: 22,
+  },
+
+  deleteModal: {
+    borderRadius: 28,
+    borderWidth: 1,
+    elevation: 0,
+    overflow: "hidden",
+  },
+
+  deleteContent: {
+    padding: 22,
+    alignItems: "center",
+  },
+
+  deleteIconBox: {
+    width: 58,
+    height: 58,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 16,
+  },
+
+  deleteTitle: {
+    fontSize: 21,
+    fontWeight: "900",
+    letterSpacing: -0.35,
+    textAlign: "center",
+  },
+
+  deleteText: {
+    marginTop: 8,
+    fontSize: 13.5,
+    lineHeight: 20,
+    textAlign: "center",
+  },
+
+  deletePreview: {
+    width: "100%",
+    borderRadius: 18,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginTop: 16,
+  },
+
+  deletePreviewTitle: {
+    fontSize: 14,
+    fontWeight: "900",
+    textAlign: "center",
+  },
+
+  deletePreviewSubtitle: {
+    marginTop: 3,
+    fontSize: 12.5,
+    fontWeight: "700",
+    textAlign: "center",
+  },
+
+  deleteActions: {
+    width: "100%",
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 20,
+  },
+
+  cancelDeleteButton: {
+    flex: 1,
+    borderRadius: 16,
+    elevation: 0,
+  },
+
+  confirmDeleteButton: {
+    flex: 1,
+    borderRadius: 16,
+    elevation: 0,
+  },
+
+  deleteButtonContent: {
+    height: 48,
+  },
+
+  deleteButtonLabel: {
+    fontSize: 13.5,
+    fontWeight: "900",
   },
 });
