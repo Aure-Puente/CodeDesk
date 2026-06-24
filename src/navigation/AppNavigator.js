@@ -16,7 +16,7 @@ import ProjectsScreen from "../screens/ProjectsScreen";
 import PaymentsScreen from "../screens/PaymentsScreen";
 import MoreScreen from "../screens/MoreScreen";
 import CredentialsScreen from "../screens/CredentialsScreen";
-import DatabaseScreen from "../screens/DataBaseScreen";
+import DataBaseScreen from "../screens/DataBaseScreen";
 import NotesScreen from "../screens/NotesScreen";
 import StatsScreen from "../screens/StatsScreen";
 import ProfileScreen from "../screens/ProfileScreen";
