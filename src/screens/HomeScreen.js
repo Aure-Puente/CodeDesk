@@ -1,6 +1,6 @@
 //Importaciones:
 import React, { useEffect, useMemo, useState } from "react";
-import { ScrollView, StyleSheet, View } from "react-native";
+import { Image, ScrollView, StyleSheet, View } from "react-native";
 import {
   ActivityIndicator,
   Card,
@@ -12,6 +12,9 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { collection, onSnapshot, query, where } from "firebase/firestore";
 import { db } from "../firebase/firebaseConfig";
 import { useAuth } from "../context/AuthContext";
+
+//Assets:
+const adaptiveIcon = require("../../assets/adaptive-icon.png");
 
 //JS:
 const hexToRgba = (hex, alpha = 1) => {
@@ -58,7 +61,6 @@ export default function HomeScreen({ theme }) {
   const [tasksLoaded, setTasksLoaded] = useState(false);
   const [projectsLoaded, setProjectsLoaded] = useState(false);
 
-  const isDarkMode = theme.dark;
   const loading = !tasksLoaded || !projectsLoaded;
 
   useEffect(() => {
@@ -192,17 +194,11 @@ export default function HomeScreen({ theme }) {
                 <View style={styles.heroText}>
                   <Text
                     style={[
-                      styles.heroEyebrow,
-                      { color: theme.colors.secondary },
+                      styles.heroTitle,
+                      { color: theme.colors.text },
                     ]}
                   >
                     Panel principal
-                  </Text>
-
-                  <Text
-                    style={[styles.heroTitle, { color: theme.colors.text }]}
-                  >
-                    Tu espacio de trabajo
                   </Text>
 
                   <Text
@@ -221,11 +217,7 @@ export default function HomeScreen({ theme }) {
                     { backgroundColor: theme.colors.primarySoft },
                   ]}
                 >
-                  <MaterialCommunityIcons
-                    name="view-dashboard-outline"
-                    size={25}
-                    color={theme.colors.primary}
-                  />
+                  <Image source={adaptiveIcon} style={styles.heroLogo} />
                 </View>
               </View>
 
@@ -657,33 +649,33 @@ const styles = StyleSheet.create({
     paddingRight: 12,
   },
 
-  heroEyebrow: {
-    fontSize: 12,
-    fontWeight: "800",
-    textTransform: "uppercase",
-    letterSpacing: 0.4,
-  },
-
   heroTitle: {
-    marginTop: 4,
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: "900",
-    letterSpacing: -0.5,
+    letterSpacing: -0.6,
+    lineHeight: 30,
   },
 
   heroDescription: {
-    marginTop: 5,
+    marginTop: 6,
     fontSize: 13,
     lineHeight: 18,
     maxWidth: 260,
   },
 
   heroIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 17,
+    width: 85,
+    height: 85,
+    borderRadius: 28,
     alignItems: "center",
     justifyContent: "center",
+    overflow: "hidden",
+  },
+
+  heroLogo: {
+    width: 85,
+    height: 85,
+    borderRadius: 28,
   },
 
   heroStats: {

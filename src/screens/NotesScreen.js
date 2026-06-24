@@ -190,7 +190,9 @@ export default function NotesScreen({ theme }) {
     }
 
     try {
-      const selectedProject = projects.find((project) => project.id === projectId);
+      const selectedProject = projects.find(
+        (project) => project.id === projectId
+      );
 
       const payload = {
         userId: user.uid,
@@ -405,11 +407,12 @@ export default function NotesScreen({ theme }) {
             ]}
           />
 
-        <Text
-          style={[styles.title, { color: theme.colors.text }]}
-        >
-          Notas
-        </Text>
+          <Text
+            variant="headlineSmall"
+            style={[styles.title, { color: theme.colors.text }]}
+          >
+            Mis Notas
+          </Text>
         </View>
 
         <Text style={[styles.subtitle, { color: theme.colors.secondary }]}>
@@ -462,7 +465,10 @@ export default function NotesScreen({ theme }) {
               </Text>
 
               <Text
-                style={[styles.filtersSubtitle, { color: theme.colors.secondary }]}
+                style={[
+                  styles.filtersSubtitle,
+                  { color: theme.colors.secondary },
+                ]}
               >
                 {activeFiltersCount > 0
                   ? `${activeFiltersCount} filtro activo`
@@ -478,7 +484,10 @@ export default function NotesScreen({ theme }) {
                 ]}
               >
                 <Text
-                  style={[styles.activeBadgeText, { color: theme.colors.primary }]}
+                  style={[
+                    styles.activeBadgeText,
+                    { color: theme.colors.primary },
+                  ]}
                 >
                   {activeFiltersCount}
                 </Text>
@@ -632,7 +641,10 @@ export default function NotesScreen({ theme }) {
                 </Text>
 
                 <Text
-                  style={[styles.modalSubtitle, { color: theme.colors.secondary }]}
+                  style={[
+                    styles.modalSubtitle,
+                    { color: theme.colors.secondary },
+                  ]}
                 >
                   Guardá una idea, comando, bug o recordatorio rápido.
                 </Text>
@@ -859,7 +871,10 @@ function DeleteModal({
                 ]}
               >
                 <Text
-                  style={[styles.deletePreviewTitle, { color: theme.colors.text }]}
+                  style={[
+                    styles.deletePreviewTitle,
+                    { color: theme.colors.text },
+                  ]}
                   numberOfLines={2}
                 >
                   {previewTitle}
@@ -923,13 +938,11 @@ const styles = StyleSheet.create({
 
   header: {
     marginBottom: 18,
-    width: "100%",
   },
 
   titleRow: {
     flexDirection: "row",
     alignItems: "center",
-    width: "100%",
   },
 
   sectionMarker: {
@@ -940,11 +953,8 @@ const styles = StyleSheet.create({
   },
 
   title: {
-    fontSize: 24,
-    lineHeight: 30,
     fontWeight: "900",
     letterSpacing: -0.4,
-    minWidth: 100,
   },
 
   subtitle: {
