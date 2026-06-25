@@ -8,10 +8,23 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { db } from "../firebase/firebaseConfig";
 import { useAuth } from "../context/AuthContext";
 
-//JS:
-const screenWidth = Dimensions.get("window").width;
-const chartWidth = screenWidth - 84;
+//Responsive:
+const { width } = Dimensions.get("window");
+const IS_TABLET = width >= 768;
 
+const responsive = (mobile, tablet) => {
+  return IS_TABLET ? tablet : mobile;
+};
+
+const CONTENT_MAX_WIDTH = 860;
+const horizontalPadding = responsive(20, 34);
+const availableWidth = IS_TABLET
+  ? Math.min(width, CONTENT_MAX_WIDTH) - horizontalPadding * 2
+  : width - horizontalPadding * 2;
+
+const chartWidth = availableWidth - responsive(28, 44);
+
+//JS:
 const RANGE_OPTIONS = [
   { label: "Todo", value: "all" },
   { label: "Este mes", value: "month" },
@@ -56,7 +69,12 @@ export default function StatsScreen({ theme }) {
     const unsubTasks = onSnapshot(
       query(collection(db, "tasks"), where("userId", "==", user.uid)),
       (snapshot) => {
-        setTasks(snapshot.docs.map((document) => ({ id: document.id, ...document.data() })));
+        setTasks(
+          snapshot.docs.map((document) => ({
+            id: document.id,
+            ...document.data(),
+          }))
+        );
         setLoading(false);
       }
     );
@@ -64,7 +82,12 @@ export default function StatsScreen({ theme }) {
     const unsubProjects = onSnapshot(
       query(collection(db, "projects"), where("userId", "==", user.uid)),
       (snapshot) => {
-        setProjects(snapshot.docs.map((document) => ({ id: document.id, ...document.data() })));
+        setProjects(
+          snapshot.docs.map((document) => ({
+            id: document.id,
+            ...document.data(),
+          }))
+        );
         setLoading(false);
       }
     );
@@ -72,7 +95,12 @@ export default function StatsScreen({ theme }) {
     const unsubPayments = onSnapshot(
       query(collection(db, "payments"), where("userId", "==", user.uid)),
       (snapshot) => {
-        setPayments(snapshot.docs.map((document) => ({ id: document.id, ...document.data() })));
+        setPayments(
+          snapshot.docs.map((document) => ({
+            id: document.id,
+            ...document.data(),
+          }))
+        );
         setLoading(false);
       }
     );
@@ -80,7 +108,12 @@ export default function StatsScreen({ theme }) {
     const unsubNotes = onSnapshot(
       query(collection(db, "notes"), where("userId", "==", user.uid)),
       (snapshot) => {
-        setNotes(snapshot.docs.map((document) => ({ id: document.id, ...document.data() })));
+        setNotes(
+          snapshot.docs.map((document) => ({
+            id: document.id,
+            ...document.data(),
+          }))
+        );
         setLoading(false);
       }
     );
@@ -191,10 +224,10 @@ export default function StatsScreen({ theme }) {
       stroke: theme.colors.borderSoft || theme.colors.outline,
     },
     propsForLabels: {
-      fontSize: 11,
+      fontSize: responsive(11, 13),
       fontWeight: "700",
     },
-    barPercentage: 0.68,
+    barPercentage: responsive(0.68, 0.74),
   };
 
   const taskStatusData = {
@@ -217,21 +250,21 @@ export default function StatsScreen({ theme }) {
       population: stats.activeProjects,
       color: theme.colors.primary,
       legendFontColor: theme.colors.secondary,
-      legendFontSize: 12,
+      legendFontSize: responsive(12, 14),
     },
     {
       name: "Pausados",
       population: stats.pausedProjects,
       color: theme.colors.warning,
       legendFontColor: theme.colors.secondary,
-      legendFontSize: 12,
+      legendFontSize: responsive(12, 14),
     },
     {
       name: "Finalizados",
       population: stats.finishedProjects,
       color: theme.colors.success,
       legendFontColor: theme.colors.secondary,
-      legendFontSize: 12,
+      legendFontSize: responsive(12, 14),
     },
   ].filter((item) => item.population > 0);
 
@@ -304,7 +337,7 @@ export default function StatsScreen({ theme }) {
 
       {loading ? (
         <View style={styles.loadingBox}>
-          <ActivityIndicator color={theme.colors.primary} />
+          <ActivityIndicator color={theme.colors.primary} size="large" />
         </View>
       ) : (
         <>
@@ -327,7 +360,7 @@ export default function StatsScreen({ theme }) {
               >
                 <MaterialCommunityIcons
                   name="folder-multiple-outline"
-                  size={28}
+                  size={responsive(28, 38)}
                   color={theme.colors.primary}
                 />
               </View>
@@ -380,7 +413,7 @@ export default function StatsScreen({ theme }) {
                     <PieChart
                       data={projectStatusData}
                       width={chartWidth}
-                      height={205}
+                      height={responsive(205, 260)}
                       chartConfig={chartConfig}
                       accessor="population"
                       backgroundColor="transparent"
@@ -536,7 +569,7 @@ export default function StatsScreen({ theme }) {
                   <BarChart
                     data={taskStatusData}
                     width={chartWidth}
-                    height={220}
+                    height={responsive(220, 270)}
                     chartConfig={chartConfig}
                     fromZero
                     showValuesOnTopOfBars
@@ -666,7 +699,11 @@ function SectionHeader({ title, subtitle, icon, color, softColor, theme }) {
   return (
     <View style={styles.sectionHeader}>
       <View style={[styles.sectionIconBox, { backgroundColor: softColor }]}>
-        <MaterialCommunityIcons name={icon} size={19} color={color} />
+        <MaterialCommunityIcons
+          name={icon}
+          size={responsive(19, 25)}
+          color={color}
+        />
       </View>
 
       <View style={styles.sectionTextBox}>
@@ -720,7 +757,11 @@ function MiniMetric({ title, value, icon, color, softColor, theme }) {
       ]}
     >
       <View style={[styles.miniIconBox, { backgroundColor: softColor }]}>
-        <MaterialCommunityIcons name={icon} size={17} color={color} />
+        <MaterialCommunityIcons
+          name={icon}
+          size={responsive(17, 22)}
+          color={color}
+        />
       </View>
 
       <View style={styles.miniMetricText}>
@@ -751,7 +792,11 @@ function MoneyBox({ title, value, icon, color, softColor, theme }) {
       ]}
     >
       <View style={[styles.moneyIconBox, { backgroundColor: softColor }]}>
-        <MaterialCommunityIcons name={icon} size={18} color={color} />
+        <MaterialCommunityIcons
+          name={icon}
+          size={responsive(18, 23)}
+          color={color}
+        />
       </View>
 
       <Text
@@ -784,7 +829,7 @@ function EmptyBox({ text, icon, theme }) {
     >
       <MaterialCommunityIcons
         name={icon}
-        size={24}
+        size={responsive(24, 31)}
         color={theme.colors.secondary}
       />
 
@@ -801,13 +846,16 @@ const styles = StyleSheet.create({
   },
 
   content: {
-    paddingHorizontal: 20,
-    paddingTop: 6,
-    paddingBottom: 135,
+    width: "100%",
+    maxWidth: responsive(undefined, CONTENT_MAX_WIDTH),
+    alignSelf: "center",
+    paddingHorizontal: horizontalPadding,
+    paddingTop: responsive(6, 18),
+    paddingBottom: responsive(135, 170),
   },
 
   header: {
-    marginBottom: 18,
+    marginBottom: responsive(18, 26),
   },
 
   titleRow: {
@@ -816,33 +864,33 @@ const styles = StyleSheet.create({
   },
 
   sectionMarker: {
-    width: 5,
-    height: 28,
+    width: responsive(5, 6),
+    height: responsive(28, 34),
     borderRadius: 999,
-    marginRight: 10,
+    marginRight: responsive(10, 13),
   },
 
   title: {
-    fontSize: 24,
-    lineHeight: 30,
+    fontSize: responsive(24, 31),
+    lineHeight: responsive(30, 38),
     fontWeight: "900",
     letterSpacing: -0.4,
   },
 
   subtitle: {
-    marginTop: 7,
-    fontSize: 13.5,
-    lineHeight: 19,
-    maxWidth: 340,
+    marginTop: responsive(7, 10),
+    fontSize: responsive(13.5, 16),
+    lineHeight: responsive(19, 23),
+    maxWidth: responsive(340, 560),
   },
 
   filtersScroll: {
-    marginBottom: 14,
+    marginBottom: responsive(14, 20),
   },
 
   filtersContent: {
-    paddingRight: 20,
-    gap: 8,
+    paddingRight: responsive(20, 34),
+    gap: responsive(8, 11),
   },
 
   filterChip: {
@@ -851,38 +899,38 @@ const styles = StyleSheet.create({
   },
 
   filterChipText: {
-    fontSize: 12,
+    fontSize: responsive(12, 14),
     fontWeight: "900",
   },
 
   loadingBox: {
-    minHeight: 180,
+    minHeight: responsive(180, 260),
     alignItems: "center",
     justifyContent: "center",
   },
 
   heroCard: {
-    borderRadius: 26,
+    borderRadius: responsive(26, 32),
     borderWidth: 1,
     elevation: 0,
-    marginBottom: 14,
+    marginBottom: responsive(14, 20),
     overflow: "hidden",
   },
 
   heroContent: {
-    minHeight: 118,
-    padding: 16,
+    minHeight: responsive(118, 154),
+    padding: responsive(16, 24),
     flexDirection: "row",
     alignItems: "center",
   },
 
   heroIconBox: {
-    width: 62,
-    height: 62,
-    borderRadius: 22,
+    width: responsive(62, 82),
+    height: responsive(62, 82),
+    borderRadius: responsive(22, 28),
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 14,
+    marginRight: responsive(14, 20),
   },
 
   heroInfo: {
@@ -890,49 +938,49 @@ const styles = StyleSheet.create({
   },
 
   heroLabel: {
-    fontSize: 13,
+    fontSize: responsive(13, 16),
     fontWeight: "800",
   },
 
   heroValue: {
-    marginTop: 2,
-    fontSize: 42,
-    lineHeight: 48,
+    marginTop: responsive(2, 4),
+    fontSize: responsive(42, 56),
+    lineHeight: responsive(48, 62),
     fontWeight: "900",
     letterSpacing: -1,
   },
 
   heroHint: {
-    marginTop: 2,
-    fontSize: 12.5,
+    marginTop: responsive(2, 4),
+    fontSize: responsive(12.5, 15),
     fontWeight: "700",
   },
 
   card: {
-    borderRadius: 24,
+    borderRadius: responsive(24, 30),
     borderWidth: 1,
     elevation: 0,
-    marginBottom: 14,
+    marginBottom: responsive(14, 20),
     overflow: "hidden",
   },
 
   cardContent: {
-    padding: 14,
+    padding: responsive(14, 22),
   },
 
   sectionHeader: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 14,
+    marginBottom: responsive(14, 20),
   },
 
   sectionIconBox: {
-    width: 38,
-    height: 38,
-    borderRadius: 14,
+    width: responsive(38, 50),
+    height: responsive(38, 50),
+    borderRadius: responsive(14, 18),
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 10,
+    marginRight: responsive(10, 14),
   },
 
   sectionTextBox: {
@@ -940,15 +988,15 @@ const styles = StyleSheet.create({
   },
 
   cardTitle: {
-    fontSize: 16,
+    fontSize: responsive(16, 20),
     fontWeight: "900",
     letterSpacing: -0.25,
   },
 
   cardSubtitle: {
-    marginTop: 2,
-    fontSize: 12.5,
-    lineHeight: 17,
+    marginTop: responsive(2, 4),
+    fontSize: responsive(12.5, 15),
+    lineHeight: responsive(17, 22),
   },
 
   pieWrap: {
@@ -956,31 +1004,31 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     overflow: "hidden",
-    marginTop: -2,
+    marginTop: responsive(-2, 0),
   },
 
   legendGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 10,
-    marginTop: 6,
+    gap: responsive(10, 14),
+    marginTop: responsive(6, 12),
   },
 
   legendItem: {
     flex: 1,
     minWidth: "30%",
-    borderRadius: 18,
+    borderRadius: responsive(18, 23),
     borderWidth: 1,
-    padding: 11,
+    padding: responsive(11, 15),
     flexDirection: "row",
     alignItems: "center",
   },
 
   legendDot: {
-    width: 10,
-    height: 10,
+    width: responsive(10, 13),
+    height: responsive(10, 13),
     borderRadius: 999,
-    marginRight: 8,
+    marginRight: responsive(8, 10),
   },
 
   legendTextBox: {
@@ -988,38 +1036,38 @@ const styles = StyleSheet.create({
   },
 
   legendValue: {
-    fontSize: 15,
+    fontSize: responsive(15, 19),
     fontWeight: "900",
   },
 
   legendLabel: {
-    marginTop: 1,
-    fontSize: 9,
+    marginTop: responsive(1, 3),
+    fontSize: responsive(9, 12),
     fontWeight: "800",
   },
 
   progressInfoRow: {
     flexDirection: "row",
     alignItems: "flex-end",
-    marginBottom: 10,
+    marginBottom: responsive(10, 14),
   },
 
   progressPercent: {
-    fontSize: 38,
-    lineHeight: 42,
+    fontSize: responsive(38, 52),
+    lineHeight: responsive(42, 58),
     fontWeight: "900",
     letterSpacing: -0.8,
   },
 
   progressText: {
-    marginLeft: 7,
-    marginBottom: 6,
-    fontSize: 13,
+    marginLeft: responsive(7, 10),
+    marginBottom: responsive(6, 9),
+    fontSize: responsive(13, 16),
     fontWeight: "800",
   },
 
   progressTrack: {
-    height: 10,
+    height: responsive(10, 13),
     borderRadius: 999,
     overflow: "hidden",
   },
@@ -1032,27 +1080,27 @@ const styles = StyleSheet.create({
   taskMiniGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 10,
-    marginTop: 14,
+    gap: responsive(10, 14),
+    marginTop: responsive(14, 22),
   },
 
   miniMetric: {
-    width: "48%",
-    minHeight: 66,
-    borderRadius: 18,
+    width: responsive("48%", "48.8%"),
+    minHeight: responsive(66, 86),
+    borderRadius: responsive(18, 23),
     borderWidth: 1,
-    padding: 10,
+    padding: responsive(10, 14),
     flexDirection: "row",
     alignItems: "center",
   },
 
   miniIconBox: {
-    width: 34,
-    height: 34,
-    borderRadius: 13,
+    width: responsive(34, 44),
+    height: responsive(34, 44),
+    borderRadius: responsive(13, 17),
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 9,
+    marginRight: responsive(9, 12),
   },
 
   miniMetricText: {
@@ -1060,13 +1108,13 @@ const styles = StyleSheet.create({
   },
 
   miniValue: {
-    fontSize: 17,
+    fontSize: responsive(17, 22),
     fontWeight: "900",
   },
 
   miniTitle: {
-    marginTop: 1,
-    fontSize: 11.5,
+    marginTop: responsive(1, 3),
+    fontSize: responsive(11.5, 14),
     fontWeight: "800",
   },
 
@@ -1077,57 +1125,57 @@ const styles = StyleSheet.create({
   },
 
   chart: {
-    borderRadius: 18,
-    marginLeft: -10,
+    borderRadius: responsive(18, 23),
+    marginLeft: responsive(-10, -6),
   },
 
   moneyGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 10,
+    gap: responsive(10, 14),
   },
 
   moneyBox: {
-    width: "48%",
-    borderRadius: 18,
+    width: responsive("48%", "48.8%"),
+    borderRadius: responsive(18, 23),
     borderWidth: 1,
-    padding: 12,
+    padding: responsive(12, 16),
   },
 
   moneyIconBox: {
-    width: 34,
-    height: 34,
-    borderRadius: 13,
+    width: responsive(34, 44),
+    height: responsive(34, 44),
+    borderRadius: responsive(13, 17),
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 9,
+    marginBottom: responsive(9, 12),
   },
 
   moneyValue: {
-    fontSize: 16,
+    fontSize: responsive(16, 20),
     fontWeight: "900",
     letterSpacing: -0.2,
   },
 
   moneyTitle: {
-    marginTop: 2,
-    fontSize: 11.5,
+    marginTop: responsive(2, 4),
+    fontSize: responsive(11.5, 14),
     fontWeight: "800",
   },
 
   emptyBox: {
-    minHeight: 86,
-    borderRadius: 18,
+    minHeight: responsive(86, 116),
+    borderRadius: responsive(18, 23),
     borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
-    padding: 14,
+    padding: responsive(14, 20),
   },
 
   emptyText: {
-    marginTop: 7,
-    fontSize: 13,
+    marginTop: responsive(7, 10),
+    fontSize: responsive(13, 16),
     textAlign: "center",
-    lineHeight: 18,
+    lineHeight: responsive(18, 23),
   },
 });

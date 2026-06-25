@@ -1,8 +1,16 @@
 //Importaciones:
 import React, { useEffect, useMemo, useState } from "react";
-import { Alert, Image, Modal, ScrollView, StyleSheet, View } from "react-native";
 import {
-  ActivityIndicator,
+  Alert,
+  Image,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  View,
+} from "react-native";
+import {
   Button,
   Card,
   Chip,
@@ -13,7 +21,6 @@ import {
 } from "react-native-paper";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
-
 import {
   addDoc,
   collection,
@@ -87,6 +94,53 @@ function hasLocalData(credential) {
   return Boolean(credential?.local?.email || credential?.local?.password);
 }
 
+function getProjectIconBackground(theme, projectColor) {
+  if (theme.dark) {
+    return "rgba(248, 250, 252, 0.94)";
+  }
+
+  return hexToRgba(projectColor, 0.1);
+}
+
+function getProjectIconBorder(theme, projectColor) {
+  if (theme.dark) {
+    return hexToRgba(projectColor, 0.38);
+  }
+
+  return hexToRgba(projectColor, 0.18);
+}
+
+function getProjectSelectorBackground(theme, projectColor, selected) {
+  if (!selected) {
+    return theme.colors.surfaceSoft;
+  }
+
+  if (theme.dark) {
+    return "rgba(248, 250, 252, 0.94)";
+  }
+
+  return hexToRgba(projectColor, 0.09);
+}
+
+function getProjectSelectorBorder(theme, projectColor, selected) {
+  if (!selected) {
+    return theme.colors.borderSoft;
+  }
+
+  if (theme.dark) {
+    return hexToRgba(projectColor, 0.42);
+  }
+
+  return hexToRgba(projectColor, 0.2);
+}
+
+function getSkeletonColors(theme) {
+  return {
+    soft: theme.dark ? "rgba(255,255,255,0.08)" : "rgba(15,23,42,0.07)",
+    strong: theme.dark ? "rgba(255,255,255,0.12)" : "rgba(15,23,42,0.11)",
+  };
+}
+
 export default function CredentialsScreen({ theme }) {
   const { user } = useAuth();
 
@@ -103,6 +157,7 @@ export default function CredentialsScreen({ theme }) {
   const [credentialToDelete, setCredentialToDelete] = useState(null);
 
   const [projectId, setProjectId] = useState(null);
+  const [projectSelectorOpen, setProjectSelectorOpen] = useState(false);
   const [type, setType] = useState("General");
   const [filterType, setFilterType] = useState("Todos");
 
@@ -166,7 +221,7 @@ export default function CredentialsScreen({ theme }) {
   }, [user]);
 
   const selectedProject = useMemo(() => {
-    return projects.find((project) => project.id === projectId);
+    return projects.find((project) => project.id === projectId) || null;
   }, [projects, projectId]);
 
   const filteredCredentials = useMemo(() => {
@@ -180,6 +235,7 @@ export default function CredentialsScreen({ theme }) {
   function resetForm() {
     setEditingCredential(null);
     setProjectId(null);
+    setProjectSelectorOpen(false);
     setType("General");
 
     setProductionEmail("");
@@ -200,6 +256,7 @@ export default function CredentialsScreen({ theme }) {
   function openEditModal(credential) {
     setEditingCredential(credential);
     setProjectId(credential.projectId || null);
+    setProjectSelectorOpen(false);
     setType(credential.type || "General");
 
     setProductionEmail(credential.production?.email || "");
@@ -300,39 +357,11 @@ export default function CredentialsScreen({ theme }) {
     }
   }
 
-  function ProjectIcon({ item, size = 56 }) {
-    const color = item?.projectColor || item?.color || theme.colors.primary;
-    const logoUrl = item?.projectLogoUrl || item?.logoUrl;
-    const softColor = theme.dark
-      ? hexToRgba(color, 0.18)
-      : hexToRgba(color, 0.1);
-
-    return (
-      <View
-        style={[
-          styles.projectIcon,
-          {
-            width: size,
-            height: size,
-            borderRadius: size / 3,
-            backgroundColor: softColor,
-          },
-        ]}
-      >
-        {logoUrl ? (
-          <Image source={{ uri: logoUrl }} style={styles.logo} />
-        ) : (
-          <Text style={[styles.projectLetter, { color }]}>
-            {(item?.projectName || item?.name || "P").charAt(0).toUpperCase()}
-          </Text>
-        )}
-      </View>
-    );
-  }
-
   function renderCredentialCard(credential) {
     const projectColor = credential.projectColor || theme.colors.primary;
     const typeValue = credential.type || "General";
+    const hasProduction = hasProductionData(credential);
+    const hasLocal = hasLocalData(credential);
 
     return (
       <Card
@@ -352,7 +381,7 @@ export default function CredentialsScreen({ theme }) {
         >
           <View style={styles.cardContent}>
             <View style={styles.cardRow}>
-              <ProjectIcon item={credential} />
+              <ProjectIcon item={credential} theme={theme} />
 
               <View style={styles.cardInfo}>
                 <Text
@@ -377,25 +406,29 @@ export default function CredentialsScreen({ theme }) {
                   </Text>
                 </View>
 
-                <View style={styles.chipsRow}>
-                  <SmallInfoChip
-                    label="Producción"
-                    icon="server"
-                    active={hasProductionData(credential)}
-                    color={theme.colors.info}
-                    softColor={theme.colors.infoSoft}
-                    theme={theme}
-                  />
+                {(hasProduction || hasLocal) && (
+                  <View style={styles.chipsRow}>
+                    {hasProduction && (
+                      <SmallInfoChip
+                        label="Producción"
+                        icon="server"
+                        color={theme.colors.info}
+                        softColor={theme.colors.infoSoft}
+                        theme={theme}
+                      />
+                    )}
 
-                  <SmallInfoChip
-                    label="Local"
-                    icon="laptop"
-                    active={hasLocalData(credential)}
-                    color={theme.colors.warning}
-                    softColor={theme.colors.warningSoft}
-                    theme={theme}
-                  />
-                </View>
+                    {hasLocal && (
+                      <SmallInfoChip
+                        label="Local"
+                        icon="laptop"
+                        color={theme.colors.warning}
+                        softColor={theme.colors.warningSoft}
+                        theme={theme}
+                      />
+                    )}
+                  </View>
+                )}
               </View>
 
               <MaterialCommunityIcons
@@ -416,6 +449,7 @@ export default function CredentialsScreen({ theme }) {
       style={[styles.container, { backgroundColor: theme.colors.background }]}
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
     >
       <View style={styles.header}>
         <View style={styles.titleRow}>
@@ -479,9 +513,7 @@ export default function CredentialsScreen({ theme }) {
       </ScrollView>
 
       {loading ? (
-        <View style={styles.loadingBox}>
-          <ActivityIndicator color={theme.colors.primary} />
-        </View>
+        <CredentialsSkeleton theme={theme} />
       ) : filteredCredentials.length === 0 ? (
         <Card
           mode="contained"
@@ -532,374 +564,487 @@ export default function CredentialsScreen({ theme }) {
       )}
 
       <Modal visible={modalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View
-            style={[
-              styles.modal,
-              {
-                backgroundColor: theme.colors.surface,
-                borderColor: theme.colors.borderSoft,
-              },
-            ]}
-          >
-            <View style={styles.modalHandle} />
+        <KeyboardAvoidingView
+          style={styles.modalKeyboardView}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          keyboardVerticalOffset={Platform.OS === "ios" ? 12 : 0}
+        >
+          <View style={styles.modalOverlay}>
+            <View
+              style={[
+                styles.modal,
+                {
+                  backgroundColor: theme.colors.surface,
+                  borderColor: theme.colors.borderSoft,
+                },
+              ]}
+            >
+              <View style={styles.modalHandle} />
 
-            <View style={styles.modalHeader}>
-              <View style={styles.modalTitleBox}>
-                <Text style={[styles.modalTitle, { color: theme.colors.text }]}>
-                  {editingCredential ? "Editar credenciales" : "Nueva credencial"}
-                </Text>
-
-                <Text
-                  style={[styles.modalSubtitle, { color: theme.colors.secondary }]}
-                >
-                  Cargá accesos para producción y local.
-                </Text>
-              </View>
-
-              <IconButton
-                icon="close"
-                size={21}
-                iconColor={theme.colors.secondary}
-                style={styles.closeButton}
-                onPress={() => {
-                  resetForm();
-                  setModalVisible(false);
-                }}
-              />
-            </View>
-
-            <ScrollView showsVerticalScrollIndicator={false}>
-              <FormSection title="Proyecto" theme={theme} />
-
-              {projects.length === 0 ? (
-                <View
-                  style={[
-                    styles.noProjectsBox,
-                    {
-                      backgroundColor: theme.colors.surfaceSoft,
-                      borderColor: theme.colors.borderSoft,
-                    },
-                  ]}
-                >
-                  <MaterialCommunityIcons
-                    name="folder-alert-outline"
-                    size={22}
-                    color={theme.colors.secondary}
-                  />
+              <View style={styles.modalHeader}>
+                <View style={styles.modalTitleBox}>
+                  <Text style={[styles.modalTitle, { color: theme.colors.text }]}>
+                    {editingCredential ? "Editar credenciales" : "Nueva credencial"}
+                  </Text>
 
                   <Text
                     style={[
-                      styles.noProjectsText,
+                      styles.modalSubtitle,
                       { color: theme.colors.secondary },
                     ]}
                   >
-                    Primero necesitás crear un proyecto.
+                    Cargá accesos para producción y local.
                   </Text>
                 </View>
-              ) : (
-                <View style={styles.optionWrap}>
-                  {projects.map((project) => {
-                    const selected = projectId === project.id;
-                    const color = project.color || theme.colors.primary;
 
-                    return (
-                      <ProjectOptionChip
-                        key={project.id}
-                        label={project.name}
-                        selected={selected}
-                        color={color}
-                        theme={theme}
-                        onPress={() => setProjectId(project.id)}
-                      />
-                    );
-                  })}
-                </View>
-              )}
-
-              <FormSection title="Tipo" theme={theme} />
-
-              <View style={styles.optionWrap}>
-                {CREDENTIAL_TYPES.map((item) => {
-                  const selected = type === item;
-
-                  return (
-                    <FilterChip
-                      key={item}
-                      label={item}
-                      icon={getTypeIcon(item)}
-                      selected={selected}
-                      color={theme.colors.info}
-                      softColor={theme.colors.infoSoft}
-                      theme={theme}
-                      onPress={() => setType(item)}
-                    />
-                  );
-                })}
+                <IconButton
+                  icon="close"
+                  size={21}
+                  iconColor={theme.colors.secondary}
+                  style={styles.closeButton}
+                  onPress={() => {
+                    resetForm();
+                    setModalVisible(false);
+                  }}
+                />
               </View>
 
-              <CredentialFormSection
-                title="Producción"
-                icon="server"
-                color={theme.colors.info}
-                softColor={theme.colors.infoSoft}
-                theme={theme}
-              />
-
-              <TextInput
-                label="URL producción"
-                value={productionUrl}
-                onChangeText={setProductionUrl}
-                mode="outlined"
-                autoCapitalize="none"
-                style={styles.input}
-                outlineStyle={styles.inputOutline}
-              />
-
-              <TextInput
-                label="Email / usuario producción"
-                value={productionEmail}
-                onChangeText={setProductionEmail}
-                mode="outlined"
-                autoCapitalize="none"
-                style={styles.input}
-                outlineStyle={styles.inputOutline}
-              />
-
-              <TextInput
-                label="Contraseña producción"
-                value={productionPassword}
-                onChangeText={setProductionPassword}
-                mode="outlined"
-                autoCapitalize="none"
-                style={styles.input}
-                outlineStyle={styles.inputOutline}
-              />
-
-              <CredentialFormSection
-                title="Local"
-                icon="laptop"
-                color={theme.colors.warning}
-                softColor={theme.colors.warningSoft}
-                theme={theme}
-              />
-
-              <TextInput
-                label="Email / usuario local"
-                value={localEmail}
-                onChangeText={setLocalEmail}
-                mode="outlined"
-                autoCapitalize="none"
-                style={styles.input}
-                outlineStyle={styles.inputOutline}
-              />
-
-              <TextInput
-                label="Contraseña local"
-                value={localPassword}
-                onChangeText={setLocalPassword}
-                mode="outlined"
-                autoCapitalize="none"
-                style={styles.input}
-                outlineStyle={styles.inputOutline}
-              />
-
-              <TextInput
-                label="Notas"
-                value={notes}
-                onChangeText={setNotes}
-                mode="outlined"
-                multiline
-                numberOfLines={3}
-                style={styles.input}
-                outlineStyle={styles.inputOutline}
-              />
-
-              <Button
-                mode="contained"
-                icon={editingCredential ? "content-save-outline" : "plus"}
-                style={styles.saveButton}
-                contentStyle={styles.saveButtonContent}
-                labelStyle={styles.saveButtonLabel}
-                onPress={handleSaveCredential}
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="interactive"
+                contentContainerStyle={styles.modalScrollContent}
               >
-                {editingCredential ? "Guardar cambios" : "Guardar credencial"}
-              </Button>
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
+                <FormSection title="Proyecto" theme={theme} />
 
-      <Modal visible={detailsVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View
-            style={[
-              styles.modal,
-              {
-                backgroundColor: theme.colors.surface,
-                borderColor: theme.colors.borderSoft,
-              },
-            ]}
-          >
-            <View style={styles.modalHandle} />
-
-            <View style={styles.modalHeader}>
-              <View style={styles.modalTitleBox}>
-                <Text style={[styles.modalTitle, { color: theme.colors.text }]}>
-                  Credenciales
-                </Text>
-
-                <Text
-                  style={[styles.modalSubtitle, { color: theme.colors.secondary }]}
-                >
-                  Detalle de accesos guardados.
-                </Text>
-              </View>
-
-              <IconButton
-                icon="close"
-                size={21}
-                iconColor={theme.colors.secondary}
-                style={styles.closeButton}
-                onPress={() => {
-                  setDetailsVisible(false);
-                  setSelectedCredential(null);
-                }}
-              />
-            </View>
-
-            {selectedCredential && (
-              <ScrollView showsVerticalScrollIndicator={false}>
-                <View
-                  style={[
-                    styles.detailsHeader,
-                    {
-                      backgroundColor: theme.colors.surfaceSoft,
-                      borderColor: theme.colors.borderSoft,
-                    },
-                  ]}
-                >
-                  <ProjectIcon item={selectedCredential} size={62} />
-
-                  <View style={styles.cardInfo}>
-                    <Text
-                      style={[styles.projectName, { color: theme.colors.text }]}
-                      numberOfLines={1}
-                    >
-                      {selectedCredential.projectName || "Proyecto sin nombre"}
-                    </Text>
-
-                    <View style={styles.typeRow}>
-                      <MaterialCommunityIcons
-                        name={getTypeIcon(selectedCredential.type || "General")}
-                        size={15}
-                        color={theme.colors.primary}
-                      />
-
-                      <Text
-                        style={[
-                          styles.typeText,
-                          { color: theme.colors.secondary },
-                        ]}
-                      >
-                        {selectedCredential.type || "General"}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-
-                <CredentialBlock
-                  title="Producción"
-                  icon="server"
-                  data={selectedCredential.production}
-                  theme={theme}
-                  onCopy={copyValue}
-                  color={theme.colors.info}
-                  softColor={theme.colors.infoSoft}
-                />
-
-                <CredentialBlock
-                  title="Local"
-                  icon="laptop"
-                  data={selectedCredential.local}
-                  theme={theme}
-                  onCopy={copyValue}
-                  color={theme.colors.warning}
-                  softColor={theme.colors.warningSoft}
-                  showUrl={false}
-                />
-
-                {!!selectedCredential.notes && (
+                {projects.length === 0 ? (
                   <View
                     style={[
-                      styles.notesCard,
+                      styles.noProjectsBox,
                       {
                         backgroundColor: theme.colors.surfaceSoft,
                         borderColor: theme.colors.borderSoft,
                       },
                     ]}
                   >
-                    <View style={styles.blockHeader}>
-                      <View
+                    <MaterialCommunityIcons
+                      name="folder-alert-outline"
+                      size={22}
+                      color={theme.colors.secondary}
+                    />
+
+                    <Text
+                      style={[
+                        styles.noProjectsText,
+                        { color: theme.colors.secondary },
+                      ]}
+                    >
+                      Primero necesitás crear un proyecto.
+                    </Text>
+                  </View>
+                ) : (
+                  <>
+                    <TouchableRipple
+                      onPress={() => setProjectSelectorOpen((prev) => !prev)}
+                      rippleColor={theme.colors.primarySoft}
+                      style={[
+                        styles.projectSelectorCard,
+                        {
+                          backgroundColor: getProjectSelectorBackground(
+                            theme,
+                            selectedProject?.color || theme.colors.primary,
+                            !!selectedProject
+                          ),
+                          borderColor: getProjectSelectorBorder(
+                            theme,
+                            selectedProject?.color || theme.colors.primary,
+                            !!selectedProject
+                          ),
+                        },
+                      ]}
+                    >
+                      <View style={styles.projectSelectorContent}>
+                        <ProjectSelectorIcon
+                          theme={theme}
+                          color={selectedProject?.color || theme.colors.primary}
+                          logoUrl={selectedProject?.logoUrl}
+                          letter={selectedProject?.name?.charAt(0)?.toUpperCase()}
+                          icon={
+                            selectedProject
+                              ? "folder-outline"
+                              : "folder-search-outline"
+                          }
+                        />
+
+                        <View style={styles.projectSelectorText}>
+                          <Text
+                            style={[
+                              styles.projectSelectorTitle,
+                              {
+                                color: selectedProject
+                                  ? selectedProject.color || theme.colors.primary
+                                  : theme.colors.text,
+                              },
+                            ]}
+                            numberOfLines={1}
+                          >
+                            {selectedProject?.name || "Seleccionar proyecto"}
+                          </Text>
+
+                          <Text
+                            style={[
+                              styles.projectSelectorSubtitle,
+                              { color: theme.colors.secondary },
+                            ]}
+                          >
+                            Tocá para desplegar la lista
+                          </Text>
+                        </View>
+
+                        <MaterialCommunityIcons
+                          name={projectSelectorOpen ? "chevron-up" : "chevron-down"}
+                          size={23}
+                          color={theme.colors.secondary}
+                        />
+                      </View>
+                    </TouchableRipple>
+
+                    {projectSelectorOpen && (
+                      <Card
+                        mode="contained"
                         style={[
-                          styles.blockIconBox,
-                          { backgroundColor: theme.colors.primarySoft },
+                          styles.projectOptionsCard,
+                          {
+                            backgroundColor: theme.colors.surface,
+                            borderColor: theme.colors.borderSoft,
+                          },
                         ]}
                       >
+                        <View style={styles.projectOptionsContent}>
+                          {projects.map((project) => {
+                            const selected = projectId === project.id;
+                            const color = project.color || theme.colors.primary;
+
+                            return (
+                              <ProjectDropdownOption
+                                key={project.id}
+                                label={project.name}
+                                selected={selected}
+                                color={color}
+                                theme={theme}
+                                logoUrl={project.logoUrl}
+                                onPress={() => {
+                                  setProjectId(project.id);
+                                  setProjectSelectorOpen(false);
+                                }}
+                              />
+                            );
+                          })}
+                        </View>
+                      </Card>
+                    )}
+                  </>
+                )}
+
+                <FormSection title="Tipo" theme={theme} />
+
+                <View style={styles.optionWrap}>
+                  {CREDENTIAL_TYPES.map((item) => {
+                    const selected = type === item;
+
+                    return (
+                      <FilterChip
+                        key={item}
+                        label={item}
+                        icon={getTypeIcon(item)}
+                        selected={selected}
+                        color={theme.colors.info}
+                        softColor={theme.colors.infoSoft}
+                        theme={theme}
+                        onPress={() => setType(item)}
+                      />
+                    );
+                  })}
+                </View>
+
+                <CredentialFormSection
+                  title="Producción"
+                  icon="server"
+                  color={theme.colors.info}
+                  softColor={theme.colors.infoSoft}
+                  theme={theme}
+                />
+
+                <TextInput
+                  label="URL producción"
+                  value={productionUrl}
+                  onChangeText={setProductionUrl}
+                  mode="outlined"
+                  autoCapitalize="none"
+                  style={styles.input}
+                  outlineStyle={styles.inputOutline}
+                />
+
+                <TextInput
+                  label="Email / usuario producción"
+                  value={productionEmail}
+                  onChangeText={setProductionEmail}
+                  mode="outlined"
+                  autoCapitalize="none"
+                  style={styles.input}
+                  outlineStyle={styles.inputOutline}
+                />
+
+                <TextInput
+                  label="Contraseña producción"
+                  value={productionPassword}
+                  onChangeText={setProductionPassword}
+                  mode="outlined"
+                  autoCapitalize="none"
+                  style={styles.input}
+                  outlineStyle={styles.inputOutline}
+                />
+
+                <CredentialFormSection
+                  title="Local"
+                  icon="laptop"
+                  color={theme.colors.warning}
+                  softColor={theme.colors.warningSoft}
+                  theme={theme}
+                />
+
+                <TextInput
+                  label="Email / usuario local"
+                  value={localEmail}
+                  onChangeText={setLocalEmail}
+                  mode="outlined"
+                  autoCapitalize="none"
+                  style={styles.input}
+                  outlineStyle={styles.inputOutline}
+                />
+
+                <TextInput
+                  label="Contraseña local"
+                  value={localPassword}
+                  onChangeText={setLocalPassword}
+                  mode="outlined"
+                  autoCapitalize="none"
+                  style={styles.input}
+                  outlineStyle={styles.inputOutline}
+                />
+
+                <TextInput
+                  label="Notas"
+                  value={notes}
+                  onChangeText={setNotes}
+                  mode="outlined"
+                  multiline
+                  numberOfLines={3}
+                  style={styles.input}
+                  outlineStyle={styles.inputOutline}
+                  textAlignVertical="top"
+                />
+
+                <Button
+                  mode="contained"
+                  icon={editingCredential ? "content-save-outline" : "plus"}
+                  style={styles.saveButton}
+                  contentStyle={styles.saveButtonContent}
+                  labelStyle={styles.saveButtonLabel}
+                  onPress={handleSaveCredential}
+                >
+                  {editingCredential ? "Guardar cambios" : "Guardar credencial"}
+                </Button>
+              </ScrollView>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      <Modal visible={detailsVisible} animationType="slide" transparent>
+        <KeyboardAvoidingView
+          style={styles.modalKeyboardView}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          keyboardVerticalOffset={Platform.OS === "ios" ? 12 : 0}
+        >
+          <View style={styles.modalOverlay}>
+            <View
+              style={[
+                styles.modal,
+                {
+                  backgroundColor: theme.colors.surface,
+                  borderColor: theme.colors.borderSoft,
+                },
+              ]}
+            >
+              <View style={styles.modalHandle} />
+
+              <View style={styles.modalHeader}>
+                <View style={styles.modalTitleBox}>
+                  <Text style={[styles.modalTitle, { color: theme.colors.text }]}>
+                    Credenciales
+                  </Text>
+
+                  <Text
+                    style={[
+                      styles.modalSubtitle,
+                      { color: theme.colors.secondary },
+                    ]}
+                  >
+                    Detalle de accesos guardados.
+                  </Text>
+                </View>
+
+                <IconButton
+                  icon="close"
+                  size={21}
+                  iconColor={theme.colors.secondary}
+                  style={styles.closeButton}
+                  onPress={() => {
+                    setDetailsVisible(false);
+                    setSelectedCredential(null);
+                  }}
+                />
+              </View>
+
+              {selectedCredential && (
+                <ScrollView
+                  showsVerticalScrollIndicator={false}
+                  contentContainerStyle={styles.modalScrollContent}
+                >
+                  <View
+                    style={[
+                      styles.detailsHeader,
+                      {
+                        backgroundColor: theme.colors.surfaceSoft,
+                        borderColor: theme.colors.borderSoft,
+                      },
+                    ]}
+                  >
+                    <ProjectIcon item={selectedCredential} theme={theme} size={62} />
+
+                    <View style={styles.cardInfo}>
+                      <Text
+                        style={[styles.projectName, { color: theme.colors.text }]}
+                        numberOfLines={1}
+                      >
+                        {selectedCredential.projectName || "Proyecto sin nombre"}
+                      </Text>
+
+                      <View style={styles.typeRow}>
                         <MaterialCommunityIcons
-                          name="note-text-outline"
-                          size={18}
+                          name={getTypeIcon(selectedCredential.type || "General")}
+                          size={15}
                           color={theme.colors.primary}
                         />
+
+                        <Text
+                          style={[
+                            styles.typeText,
+                            { color: theme.colors.secondary },
+                          ]}
+                        >
+                          {selectedCredential.type || "General"}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  <CredentialBlock
+                    title="Producción"
+                    icon="server"
+                    data={selectedCredential.production}
+                    theme={theme}
+                    onCopy={copyValue}
+                    color={theme.colors.info}
+                    softColor={theme.colors.infoSoft}
+                  />
+
+                  <CredentialBlock
+                    title="Local"
+                    icon="laptop"
+                    data={selectedCredential.local}
+                    theme={theme}
+                    onCopy={copyValue}
+                    color={theme.colors.warning}
+                    softColor={theme.colors.warningSoft}
+                    showUrl={false}
+                  />
+
+                  {!!selectedCredential.notes && (
+                    <View
+                      style={[
+                        styles.notesCard,
+                        {
+                          backgroundColor: theme.colors.surfaceSoft,
+                          borderColor: theme.colors.borderSoft,
+                        },
+                      ]}
+                    >
+                      <View style={styles.blockHeader}>
+                        <View
+                          style={[
+                            styles.blockIconBox,
+                            { backgroundColor: theme.colors.primarySoft },
+                          ]}
+                        >
+                          <MaterialCommunityIcons
+                            name="note-text-outline"
+                            size={18}
+                            color={theme.colors.primary}
+                          />
+                        </View>
+
+                        <Text
+                          style={[styles.blockTitle, { color: theme.colors.text }]}
+                        >
+                          Notas
+                        </Text>
                       </View>
 
                       <Text
-                        style={[styles.blockTitle, { color: theme.colors.text }]}
+                        style={[styles.notesText, { color: theme.colors.secondary }]}
                       >
-                        Notas
+                        {selectedCredential.notes}
                       </Text>
                     </View>
+                  )}
 
-                    <Text style={[styles.notesText, { color: theme.colors.secondary }]}>
-                      {selectedCredential.notes}
-                    </Text>
+                  <View style={styles.detailsActions}>
+                    <Button
+                      mode="contained"
+                      icon="pencil-outline"
+                      buttonColor={theme.colors.primary}
+                      textColor="#FFFFFF"
+                      style={styles.editActionButton}
+                      contentStyle={styles.actionButtonContent}
+                      labelStyle={styles.actionButtonLabel}
+                      onPress={() => {
+                        setDetailsVisible(false);
+                        openEditModal(selectedCredential);
+                      }}
+                    >
+                      Editar
+                    </Button>
+
+                    <Button
+                      mode="contained-tonal"
+                      icon="delete-outline"
+                      textColor={theme.colors.danger}
+                      buttonColor={theme.colors.dangerSoft}
+                      style={styles.actionButton}
+                      contentStyle={styles.actionButtonContent}
+                      labelStyle={styles.actionButtonLabel}
+                      onPress={() => openDeleteModal(selectedCredential)}
+                    >
+                      Eliminar
+                    </Button>
                   </View>
-                )}
-
-                <View style={styles.detailsActions}>
-                  <Button
-                    mode="contained"
-                    icon="pencil-outline"
-                    buttonColor={theme.colors.primary}
-                    textColor="#FFFFFF"
-                    style={styles.editActionButton}
-                    contentStyle={styles.actionButtonContent}
-                    labelStyle={styles.actionButtonLabel}
-                    onPress={() => {
-                      setDetailsVisible(false);
-                      openEditModal(selectedCredential);
-                    }}
-                  >
-                    Editar
-                  </Button>
-
-                  <Button
-                    mode="contained-tonal"
-                    icon="delete-outline"
-                    textColor={theme.colors.danger}
-                    buttonColor={theme.colors.dangerSoft}
-                    style={styles.actionButton}
-                    contentStyle={styles.actionButtonContent}
-                    labelStyle={styles.actionButtonLabel}
-                    onPress={() => openDeleteModal(selectedCredential)}
-                  >
-                    Eliminar
-                  </Button>
-                </View>
-              </ScrollView>
-            )}
+                </ScrollView>
+              )}
+            </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       <DeleteModal
@@ -914,6 +1059,123 @@ export default function CredentialsScreen({ theme }) {
         onConfirm={confirmDeleteCredential}
       />
     </ScrollView>
+  );
+}
+
+function ProjectIcon({ item, theme, size = 56 }) {
+  const color = item?.projectColor || item?.color || theme.colors.primary;
+  const logoUrl = item?.projectLogoUrl || item?.logoUrl;
+
+  return (
+    <View
+      style={[
+        styles.projectIcon,
+        {
+          width: size,
+          height: size,
+          borderRadius: size / 3,
+          backgroundColor: getProjectIconBackground(theme, color),
+          borderColor: getProjectIconBorder(theme, color),
+        },
+      ]}
+    >
+      {logoUrl ? (
+        <Image source={{ uri: logoUrl }} style={styles.logo} />
+      ) : (
+        <Text style={[styles.projectLetter, { color }]}>
+          {(item?.projectName || item?.name || "P").charAt(0).toUpperCase()}
+        </Text>
+      )}
+    </View>
+  );
+}
+
+function ProjectSelectorIcon({
+  theme,
+  color,
+  logoUrl,
+  letter,
+  icon = "folder-outline",
+}) {
+  return (
+    <View
+      style={[
+        styles.projectSelectorIconBox,
+        {
+          backgroundColor: getProjectIconBackground(theme, color),
+          borderColor: getProjectIconBorder(theme, color),
+        },
+      ]}
+    >
+      {logoUrl ? (
+        <Image source={{ uri: logoUrl }} style={styles.logo} />
+      ) : letter ? (
+        <Text style={[styles.projectSelectorLetter, { color }]}>{letter}</Text>
+      ) : (
+        <MaterialCommunityIcons name={icon} size={20} color={color} />
+      )}
+    </View>
+  );
+}
+
+function ProjectDropdownOption({
+  label,
+  selected,
+  color,
+  theme,
+  logoUrl,
+  onPress,
+}) {
+  return (
+    <TouchableRipple
+      onPress={onPress}
+      rippleColor={hexToRgba(color, 0.12)}
+      style={[
+        styles.projectDropdownOption,
+        {
+          backgroundColor: getProjectSelectorBackground(theme, color, selected),
+          borderColor: getProjectSelectorBorder(theme, color, selected),
+        },
+      ]}
+    >
+      <View style={styles.projectDropdownContent}>
+        <View
+          style={[
+            styles.projectDropdownIcon,
+            {
+              backgroundColor: getProjectIconBackground(theme, color),
+              borderColor: getProjectIconBorder(theme, color),
+            },
+          ]}
+        >
+          {logoUrl ? (
+            <Image source={{ uri: logoUrl }} style={styles.logo} />
+          ) : (
+            <MaterialCommunityIcons name="folder-outline" size={19} color={color} />
+          )}
+        </View>
+
+        <Text
+          style={[
+            styles.projectDropdownText,
+            {
+              color: selected ? color : theme.colors.text,
+            },
+          ]}
+          numberOfLines={1}
+        >
+          {label}
+        </Text>
+
+        {selected && (
+          <MaterialCommunityIcons
+            name="check-circle-outline"
+            size={19}
+            color={color}
+          />
+        )}
+      </View>
+    </TouchableRipple>
   );
 }
 
@@ -1011,28 +1273,24 @@ function CopyRow({ label, value, theme, onCopy }) {
   );
 }
 
-function SmallInfoChip({ label, icon, active, color, softColor, theme }) {
+function SmallInfoChip({ label, icon, color, softColor, theme }) {
   return (
     <View
       style={[
         styles.smallInfoChip,
         {
-          backgroundColor: active ? softColor : theme.colors.surfaceSoft,
-          borderColor: active ? softColor : theme.colors.borderSoft,
+          backgroundColor: softColor,
+          borderColor: softColor,
         },
       ]}
     >
-      <MaterialCommunityIcons
-        name={icon}
-        size={13}
-        color={active ? color : theme.colors.secondary}
-      />
+      <MaterialCommunityIcons name={icon} size={13} color={color} />
 
       <Text
         style={[
           styles.smallInfoChipText,
           {
-            color: active ? color : theme.colors.secondary,
+            color,
           },
         ]}
       >
@@ -1070,46 +1328,61 @@ function FilterChip({ label, icon, selected, color, softColor, theme, onPress })
   );
 }
 
-function ProjectOptionChip({ label, selected, color, theme, onPress }) {
-  const bg = selected
-    ? theme.dark
-      ? hexToRgba(color, 0.18)
-      : hexToRgba(color, 0.09)
-    : theme.colors.surfaceSoft;
-
-  return (
-    <Chip
-      compact
-      icon="folder-outline"
-      selected={selected}
-      onPress={onPress}
-      style={[
-        styles.optionChip,
-        {
-          backgroundColor: bg,
-          borderColor: selected
-            ? hexToRgba(color, theme.dark ? 0.34 : 0.18)
-            : theme.colors.borderSoft,
-        },
-      ]}
-      textStyle={[
-        styles.optionChipText,
-        {
-          color: selected ? color : theme.colors.secondary,
-        },
-      ]}
-    >
-      {label}
-    </Chip>
-  );
-}
-
 function FormSection({ title, theme }) {
   return (
     <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
       {title}
     </Text>
   );
+}
+
+function CredentialsSkeleton({ theme }) {
+  return (
+    <View style={styles.list}>
+      {[1, 2, 3, 4].map((item) => (
+        <CredentialSkeletonCard key={item} theme={theme} />
+      ))}
+    </View>
+  );
+}
+
+function CredentialSkeletonCard({ theme }) {
+  const skeleton = getSkeletonColors(theme);
+
+  return (
+    <Card
+      mode="contained"
+      style={[
+        styles.credentialCard,
+        {
+          backgroundColor: theme.colors.surface,
+          borderColor: theme.colors.borderSoft,
+        },
+      ]}
+    >
+      <View style={styles.cardContent}>
+        <View style={styles.cardRow}>
+          <SkeletonBlock style={styles.skeletonProjectIcon} color={skeleton.strong} />
+
+          <View style={styles.cardInfo}>
+            <SkeletonBlock style={styles.skeletonTitle} color={skeleton.strong} />
+            <SkeletonBlock style={styles.skeletonSubtitle} color={skeleton.soft} />
+
+            <View style={styles.skeletonChipsRow}>
+              <SkeletonBlock style={styles.skeletonChip} color={skeleton.strong} />
+              <SkeletonBlock style={styles.skeletonChipSmall} color={skeleton.soft} />
+            </View>
+          </View>
+
+          <SkeletonBlock style={styles.skeletonChevron} color={skeleton.soft} />
+        </View>
+      </View>
+    </Card>
+  );
+}
+
+function SkeletonBlock({ style, color }) {
+  return <View style={[style, { backgroundColor: color }]} />;
 }
 
 function DeleteModal({
@@ -1228,7 +1501,7 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: 20,
     paddingTop: 6,
-    paddingBottom: 135,
+    paddingBottom: 155,
   },
 
   header: {
@@ -1294,12 +1567,6 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
 
-  loadingBox: {
-    minHeight: 180,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
   emptyCard: {
     borderRadius: 24,
     borderWidth: 1,
@@ -1361,6 +1628,7 @@ const styles = StyleSheet.create({
   },
 
   projectIcon: {
+    borderWidth: 1,
     justifyContent: "center",
     alignItems: "center",
     overflow: "hidden",
@@ -1425,6 +1693,10 @@ const styles = StyleSheet.create({
     opacity: 0.75,
   },
 
+  modalKeyboardView: {
+    flex: 1,
+  },
+
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.38)",
@@ -1438,8 +1710,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderBottomWidth: 0,
     paddingHorizontal: 20,
-    paddingBottom: 20,
+    paddingBottom: 32,
     paddingTop: 10,
+  },
+
+  modalScrollContent: {
+    paddingBottom: 90,
   },
 
   modalHandle: {
@@ -1486,24 +1762,6 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
 
-  optionWrap: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    marginBottom: 14,
-  },
-
-  optionChip: {
-    borderWidth: 1,
-    borderRadius: 999,
-    marginBottom: 2,
-  },
-
-  optionChipText: {
-    fontSize: 12,
-    fontWeight: "900",
-  },
-
   noProjectsBox: {
     minHeight: 58,
     borderRadius: 18,
@@ -1521,6 +1779,103 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "700",
     lineHeight: 18,
+  },
+
+  projectSelectorCard: {
+    borderRadius: 20,
+    borderWidth: 1,
+    overflow: "hidden",
+    marginBottom: 12,
+  },
+
+  projectSelectorContent: {
+    minHeight: 64,
+    paddingHorizontal: 13,
+    paddingVertical: 10,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  projectSelectorIconBox: {
+    width: 42,
+    height: 42,
+    borderRadius: 15,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+    overflow: "hidden",
+  },
+
+  projectSelectorLetter: {
+    fontSize: 18,
+    fontWeight: "900",
+  },
+
+  projectSelectorText: {
+    flex: 1,
+  },
+
+  projectSelectorTitle: {
+    fontSize: 14.5,
+    fontWeight: "900",
+  },
+
+  projectSelectorSubtitle: {
+    marginTop: 2,
+    fontSize: 12.5,
+    fontWeight: "700",
+  },
+
+  projectOptionsCard: {
+    borderRadius: 22,
+    borderWidth: 1,
+    elevation: 0,
+    overflow: "hidden",
+    marginBottom: 14,
+  },
+
+  projectOptionsContent: {
+    padding: 12,
+    gap: 8,
+  },
+
+  projectDropdownOption: {
+    borderRadius: 18,
+    borderWidth: 1,
+    overflow: "hidden",
+  },
+
+  projectDropdownContent: {
+    minHeight: 54,
+    paddingHorizontal: 11,
+    paddingVertical: 8,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  projectDropdownIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 13,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 10,
+    overflow: "hidden",
+  },
+
+  projectDropdownText: {
+    flex: 1,
+    fontSize: 13.5,
+    fontWeight: "900",
+  },
+
+  optionWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 14,
   },
 
   formBlockHeader: {
@@ -1555,12 +1910,12 @@ const styles = StyleSheet.create({
   saveButton: {
     borderRadius: 18,
     marginTop: 12,
-    marginBottom: 10,
+    marginBottom: 24,
     elevation: 0,
   },
 
   saveButtonContent: {
-    height: 50,
+    height: 52,
   },
 
   saveButtonLabel: {
@@ -1648,7 +2003,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 10,
     marginTop: 2,
-    marginBottom: 10,
+    marginBottom: 24,
   },
 
   editActionButton: {
@@ -1664,7 +2019,7 @@ const styles = StyleSheet.create({
   },
 
   actionButtonContent: {
-    height: 46,
+    height: 48,
   },
 
   actionButtonLabel: {
@@ -1762,5 +2117,49 @@ const styles = StyleSheet.create({
   deleteButtonLabel: {
     fontSize: 13.5,
     fontWeight: "900",
+  },
+
+  skeletonProjectIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 19,
+    marginRight: 12,
+  },
+
+  skeletonTitle: {
+    width: "80%",
+    height: 17,
+    borderRadius: 999,
+    marginBottom: 8,
+  },
+
+  skeletonSubtitle: {
+    width: "54%",
+    height: 12,
+    borderRadius: 999,
+  },
+
+  skeletonChipsRow: {
+    flexDirection: "row",
+    gap: 7,
+    marginTop: 12,
+  },
+
+  skeletonChip: {
+    width: 92,
+    height: 28,
+    borderRadius: 999,
+  },
+
+  skeletonChipSmall: {
+    width: 66,
+    height: 28,
+    borderRadius: 999,
+  },
+
+  skeletonChevron: {
+    width: 25,
+    height: 25,
+    borderRadius: 999,
   },
 });

@@ -1,9 +1,17 @@
 //Importaciones:
 import React from "react";
-import { Alert, ScrollView, StyleSheet, View } from "react-native";
+import { Alert, Dimensions, ScrollView, StyleSheet, View } from "react-native";
 import { Card, Divider, Switch, Text, TouchableRipple } from "react-native-paper";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as LocalAuthentication from "expo-local-authentication";
+
+//Responsive:
+const { width } = Dimensions.get("window");
+const IS_TABLET = width >= 768;
+
+const responsive = (mobile, tablet) => {
+  return IS_TABLET ? tablet : mobile;
+};
 
 //JS:
 const MENU_ITEMS = [
@@ -60,7 +68,7 @@ function MenuRow({ item, theme, onPress, showDivider }) {
           >
             <MaterialCommunityIcons
               name={item.icon}
-              size={21}
+              size={responsive(21, 27)}
               color={theme.colors.primary}
             />
           </View>
@@ -84,7 +92,7 @@ function MenuRow({ item, theme, onPress, showDivider }) {
           {item.protected && (
             <MaterialCommunityIcons
               name="fingerprint"
-              size={21}
+              size={responsive(21, 27)}
               color={theme.colors.primary}
               style={styles.fingerprint}
             />
@@ -92,7 +100,7 @@ function MenuRow({ item, theme, onPress, showDivider }) {
 
           <MaterialCommunityIcons
             name="chevron-right"
-            size={22}
+            size={responsive(22, 28)}
             color={theme.colors.secondary}
             style={styles.chevron}
           />
@@ -173,7 +181,7 @@ export default function MoreScreen({
           />
 
           <Text
-            variant="headlineSmall"
+            variant={IS_TABLET ? "headlineMedium" : "headlineSmall"}
             style={[styles.title, { color: theme.colors.text }]}
           >
             Más
@@ -230,7 +238,7 @@ export default function MoreScreen({
           >
             <MaterialCommunityIcons
               name="theme-light-dark"
-              size={21}
+              size={responsive(21, 27)}
               color={theme.colors.primary}
             />
           </View>
@@ -260,13 +268,16 @@ const styles = StyleSheet.create({
   },
 
   content: {
-    paddingHorizontal: 20,
-    paddingTop: 6,
-    paddingBottom: 28,
+    width: "100%",
+    maxWidth: responsive(undefined, 860),
+    alignSelf: "center",
+    paddingHorizontal: responsive(20, 34),
+    paddingTop: responsive(6, 18),
+    paddingBottom: responsive(28, 60),
   },
 
   header: {
-    marginBottom: 18,
+    marginBottom: responsive(18, 26),
   },
 
   titleRow: {
@@ -275,10 +286,10 @@ const styles = StyleSheet.create({
   },
 
   sectionMarker: {
-    width: 5,
-    height: 28,
+    width: responsive(5, 6),
+    height: responsive(28, 34),
     borderRadius: 999,
-    marginRight: 10,
+    marginRight: responsive(10, 13),
   },
 
   title: {
@@ -287,59 +298,59 @@ const styles = StyleSheet.create({
   },
 
   subtitle: {
-    marginTop: 7,
-    fontSize: 13.5,
-    lineHeight: 19,
-    maxWidth: 330,
+    marginTop: responsive(7, 10),
+    fontSize: responsive(13.5, 16),
+    lineHeight: responsive(19, 23),
+    maxWidth: responsive(330, 560),
   },
 
   card: {
-    borderRadius: 22,
+    borderRadius: responsive(22, 30),
     overflow: "hidden",
     borderWidth: 1,
     elevation: 0,
   },
 
   cardContent: {
-    paddingVertical: 2,
+    paddingVertical: responsive(2, 6),
   },
 
   row: {
-    minHeight: 70,
+    minHeight: responsive(70, 88),
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 14,
-    paddingVertical: 9,
+    paddingHorizontal: responsive(14, 22),
+    paddingVertical: responsive(9, 14),
   },
 
   iconBox: {
-    width: 40,
-    height: 40,
-    borderRadius: 14,
+    width: responsive(40, 54),
+    height: responsive(40, 54),
+    borderRadius: responsive(14, 19),
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 12,
+    marginRight: responsive(12, 16),
   },
 
   rowText: {
     flex: 1,
-    paddingRight: 8,
+    paddingRight: responsive(8, 12),
   },
 
   rowTitle: {
-    fontSize: 15,
+    fontSize: responsive(15, 18),
     fontWeight: "800",
     letterSpacing: -0.2,
   },
 
   rowDescription: {
-    marginTop: 2,
-    fontSize: 12.5,
-    lineHeight: 17,
+    marginTop: responsive(2, 4),
+    fontSize: responsive(12.5, 15),
+    lineHeight: responsive(17, 21),
   },
 
   fingerprint: {
-    marginRight: 4,
+    marginRight: responsive(4, 7),
     opacity: 0.85,
   },
 
@@ -348,23 +359,23 @@ const styles = StyleSheet.create({
   },
 
   divider: {
-    marginLeft: 66,
+    marginLeft: responsive(66, 92),
     height: 1,
   },
 
   themeCard: {
-    marginTop: 14,
-    borderRadius: 22,
+    marginTop: responsive(14, 22),
+    borderRadius: responsive(22, 30),
     borderWidth: 1,
     elevation: 0,
     overflow: "hidden",
   },
 
   themeRow: {
-    minHeight: 70,
+    minHeight: responsive(70, 88),
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingHorizontal: responsive(14, 22),
+    paddingVertical: responsive(10, 14),
   },
 });

@@ -1,11 +1,17 @@
 //Importaciones:
 import React, { useEffect, useMemo, useState } from "react";
-import { Alert, Image, Modal, ScrollView, StyleSheet, View } from "react-native";
 import {
-  ActivityIndicator,
+  Alert,
+  Dimensions,
+  Image,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  View,
+} from "react-native";
+import {
   Button,
   Card,
-  Chip,
   Divider,
   IconButton,
   Text,
@@ -29,6 +35,14 @@ import {
 } from "firebase/firestore";
 import { db } from "../firebase/firebaseConfig";
 import { useAuth } from "../context/AuthContext";
+
+//Responsive:
+const { width } = Dimensions.get("window");
+const IS_TABLET = width >= 768;
+
+const responsive = (mobile, tablet) => {
+  return IS_TABLET ? tablet : mobile;
+};
 
 //JS:
 const STATUSES = ["pendiente", "en progreso", "completada", "pausada"];
@@ -74,20 +88,84 @@ function getStatusColor(theme, value) {
   if (value === "pendiente") return theme.colors.warning;
   if (value === "en progreso") return theme.colors.info;
   if (value === "completada") return theme.colors.success;
-  if (value === "pausada") return theme.colors.paused;
+  if (value === "pausada") return theme.colors.paused || "#94A3B8";
   return theme.colors.primary;
-}
-
-function getStatusSoftColor(theme, value) {
-  if (value === "pendiente") return theme.colors.warningSoft;
-  if (value === "en progreso") return theme.colors.infoSoft;
-  if (value === "completada") return theme.colors.successSoft;
-  if (value === "pausada") return theme.colors.pausedSoft;
-  return theme.colors.primarySoft;
 }
 
 function getStatusIcon(value) {
   return STATUS_ICONS[value] || STATUS_ICONS.pendiente;
+}
+
+function getProjectIconBackground(theme, projectColor) {
+  if (theme.dark) {
+    return "rgba(248, 250, 252, 0.94)";
+  }
+
+  return hexToRgba(projectColor, 0.1);
+}
+
+function getProjectIconBorder(theme, projectColor) {
+  if (theme.dark) {
+    return hexToRgba(projectColor, 0.36);
+  }
+
+  return hexToRgba(projectColor, 0.18);
+}
+
+function getProjectSelectorBackground(theme, projectColor, hasProject) {
+  if (!hasProject) {
+    return theme.colors.surfaceSoft || theme.colors.surface;
+  }
+
+  if (theme.dark) {
+    return "rgba(248, 250, 252, 0.94)";
+  }
+
+  return hexToRgba(projectColor, 0.09);
+}
+
+function getProjectSelectorBorder(theme, projectColor, hasProject) {
+  if (!hasProject) {
+    return theme.colors.borderSoft;
+  }
+
+  if (theme.dark) {
+    return hexToRgba(projectColor, 0.42);
+  }
+
+  return hexToRgba(projectColor, 0.2);
+}
+
+function getSelectableChipBackground(theme, color, selected, label) {
+  const isPausedChip = label === "Pausada";
+
+  if (!selected) {
+    return theme.dark ? "rgba(255,255,255,0.04)" : "rgba(15,23,42,0.04)";
+  }
+
+  if (isPausedChip) {
+    return theme.dark
+      ? "rgba(148, 163, 184, 0.24)"
+      : "rgba(100, 116, 139, 0.14)";
+  }
+
+  return theme.dark ? hexToRgba(color, 0.18) : hexToRgba(color, 0.1);
+}
+
+function getSelectableChipBorder(theme, color, selected, label) {
+  const isPausedChip = label === "Pausada";
+
+  if (!selected) {
+    return theme.colors.borderSoft;
+  }
+
+  if (isPausedChip) {
+    return theme.dark
+      ? "rgba(148, 163, 184, 0.46)"
+      : "rgba(100, 116, 139, 0.26)";
+  }
+
+  return theme.dark ? hexToRgba(color, 0.28) : hexToRgba(color, 0.18);
 }
 
 export default function TasksScreen({ theme }) {
@@ -99,19 +177,23 @@ export default function TasksScreen({ theme }) {
 
   const [modalVisible, setModalVisible] = useState(false);
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+  const [detailModalVisible, setDetailModalVisible] = useState(false);
+
   const [editingTask, setEditingTask] = useState(null);
   const [taskToDelete, setTaskToDelete] = useState(null);
+  const [selectedTask, setSelectedTask] = useState(null);
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [status, setStatus] = useState("pendiente");
   const [projectId, setProjectId] = useState(null);
+  const [projectSelectorOpen, setProjectSelectorOpen] = useState(false);
 
   const [filterStatus, setFilterStatus] = useState("todas");
   const [filterProject, setFilterProject] = useState("todos");
   const [filtersOpen, setFiltersOpen] = useState(false);
-
-  const isDarkMode = theme.dark;
+  const [filterProjectSelectorOpen, setFilterProjectSelectorOpen] =
+    useState(false);
 
   useEffect(() => {
     if (!user?.uid) return;
@@ -122,10 +204,16 @@ export default function TasksScreen({ theme }) {
     );
 
     const unsubscribeProjects = onSnapshot(projectsQuery, (snapshot) => {
-      const data = snapshot.docs.map((document) => ({
-        id: document.id,
-        ...document.data(),
-      }));
+      const data = snapshot.docs
+        .map((document) => ({
+          id: document.id,
+          ...document.data(),
+        }))
+        .sort((a, b) => {
+          const nameA = String(a.name || "").toLowerCase();
+          const nameB = String(b.name || "").toLowerCase();
+          return nameA.localeCompare(nameB);
+        });
 
       setProjects(data);
     });
@@ -153,6 +241,45 @@ export default function TasksScreen({ theme }) {
     };
   }, [user]);
 
+  const selectedProject = useMemo(() => {
+    return projects.find((project) => project.id === projectId) || null;
+  }, [projects, projectId]);
+
+  const selectedFilterProject = useMemo(() => {
+    if (filterProject === "todos") {
+      return {
+        id: "todos",
+        name: "Todos los proyectos",
+        color: theme.colors.primary,
+        icon: "folder-multiple-outline",
+        logoUrl: null,
+        isSpecial: true,
+      };
+    }
+
+    if (filterProject === "sinProyecto") {
+      return {
+        id: "sinProyecto",
+        name: "Sin proyecto",
+        color: theme.colors.paused || "#94A3B8",
+        icon: "checkbox-blank-circle",
+        logoUrl: null,
+        isSpecial: true,
+      };
+    }
+
+    const project = projects.find((item) => item.id === filterProject);
+
+    return {
+      id: project?.id || "todos",
+      name: project?.name || "Proyecto",
+      color: project?.color || theme.colors.primary,
+      icon: "folder-outline",
+      logoUrl: project?.logoUrl || null,
+      isSpecial: false,
+    };
+  }, [filterProject, projects, theme]);
+
   const filteredTasks = useMemo(() => {
     return tasks.filter((task) => {
       const statusOk =
@@ -175,22 +302,8 @@ export default function TasksScreen({ theme }) {
         ? "Todos los estados"
         : getStatusLabel(filterStatus);
 
-    let projectLabel = "Todos los proyectos";
-
-    if (filterProject === "sinProyecto") {
-      projectLabel = "Sin proyecto";
-    }
-
-    if (filterProject !== "todos" && filterProject !== "sinProyecto") {
-      const selectedProject = projects.find(
-        (project) => project.id === filterProject
-      );
-
-      projectLabel = selectedProject?.name || "Proyecto";
-    }
-
-    return `${statusLabel} · ${projectLabel}`;
-  }, [filterStatus, filterProject, projects]);
+    return `${statusLabel} · ${selectedFilterProject.name}`;
+  }, [filterStatus, selectedFilterProject]);
 
   function resetForm() {
     setEditingTask(null);
@@ -198,6 +311,7 @@ export default function TasksScreen({ theme }) {
     setDescription("");
     setStatus("pendiente");
     setProjectId(null);
+    setProjectSelectorOpen(false);
   }
 
   function openCreateModal() {
@@ -211,6 +325,7 @@ export default function TasksScreen({ theme }) {
     setDescription(task.description || "");
     setStatus(task.status || "pendiente");
     setProjectId(task.projectId || null);
+    setProjectSelectorOpen(false);
     setModalVisible(true);
   }
 
@@ -222,6 +337,39 @@ export default function TasksScreen({ theme }) {
   function closeDeleteModal() {
     setTaskToDelete(null);
     setDeleteModalVisible(false);
+  }
+
+  function openDetailModal(task) {
+    setSelectedTask(task);
+    setDetailModalVisible(true);
+  }
+
+  function closeDetailModal() {
+    setSelectedTask(null);
+    setDetailModalVisible(false);
+  }
+
+  function openEditFromDetail() {
+    if (!selectedTask) return;
+
+    const task = selectedTask;
+
+    closeDetailModal();
+
+    setTimeout(() => {
+      openEditModal(task);
+    }, 120);
+  }
+
+  async function moveExistingTasksDown() {
+    const updates = tasks.map((task) =>
+      updateDoc(doc(db, "tasks", task.id), {
+        order: (task.order ?? 0) + 1,
+        updatedAt: serverTimestamp(),
+      })
+    );
+
+    await Promise.all(updates);
   }
 
   async function handleSaveTask() {
@@ -247,6 +395,8 @@ export default function TasksScreen({ theme }) {
           updatedAt: serverTimestamp(),
         });
       } else {
+        await moveExistingTasksDown();
+
         await addDoc(collection(db, "tasks"), {
           userId: user.uid,
           title: title.trim(),
@@ -256,7 +406,7 @@ export default function TasksScreen({ theme }) {
           projectName: selectedProject?.name || null,
           projectColor: selectedProject?.color || null,
           projectLogoUrl: selectedProject?.logoUrl || null,
-          order: tasks.length + 1,
+          order: 1,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         });
@@ -271,10 +421,32 @@ export default function TasksScreen({ theme }) {
   }
 
   async function toggleDone(task) {
-    await updateDoc(doc(db, "tasks", task.id), {
-      status: task.status === "completada" ? "pendiente" : "completada",
-      updatedAt: serverTimestamp(),
-    });
+    try {
+      const isDone = task.status === "completada";
+
+      if (isDone) {
+        await updateDoc(doc(db, "tasks", task.id), {
+          status: "pendiente",
+          updatedAt: serverTimestamp(),
+        });
+
+        return;
+      }
+
+      const maxOrder =
+        tasks.length > 0
+          ? Math.max(...tasks.map((item) => item.order ?? 0))
+          : 0;
+
+      await updateDoc(doc(db, "tasks", task.id), {
+        status: "completada",
+        order: maxOrder + 1,
+        updatedAt: serverTimestamp(),
+      });
+    } catch (error) {
+      console.log(error);
+      Alert.alert("Error", "No se pudo actualizar la tarea.");
+    }
   }
 
   async function confirmDeleteTask() {
@@ -318,7 +490,7 @@ export default function TasksScreen({ theme }) {
             />
 
             <Text
-              variant="headlineSmall"
+              variant={IS_TABLET ? "headlineMedium" : "headlineSmall"}
               style={[styles.title, { color: theme.colors.text }]}
             >
               Tareas
@@ -361,7 +533,7 @@ export default function TasksScreen({ theme }) {
             >
               <MaterialCommunityIcons
                 name="filter-outline"
-                size={19}
+                size={responsive(19, 24)}
                 color={theme.colors.primary}
               />
             </View>
@@ -386,7 +558,7 @@ export default function TasksScreen({ theme }) {
 
             <MaterialCommunityIcons
               name={filtersOpen ? "chevron-up" : "chevron-down"}
-              size={22}
+              size={responsive(22, 28)}
               color={theme.colors.secondary}
             />
           </View>
@@ -444,62 +616,142 @@ export default function TasksScreen({ theme }) {
                 Proyecto
               </Text>
 
-              <View style={styles.chipsWrap}>
-                <FilterChip
-                  label="Todos"
-                  selected={filterProject === "todos"}
-                  color={theme.colors.primary}
-                  icon="folder-multiple-outline"
-                  theme={theme}
-                  onPress={() => setFilterProject("todos")}
-                />
-
-                <FilterChip
-                  label="Sin proyecto"
-                  selected={filterProject === "sinProyecto"}
-                  color={theme.colors.paused}
-                  icon="checkbox-blank-circle-outline"
-                  theme={theme}
-                  onPress={() => setFilterProject("sinProyecto")}
-                />
-
-                {projects.map((project) => (
-                  <FilterChip
-                    key={project.id}
-                    label={project.name}
-                    selected={filterProject === project.id}
-                    color={project.color || theme.colors.primary}
-                    icon="folder-outline"
+              <TouchableRipple
+                onPress={() => setFilterProjectSelectorOpen((prev) => !prev)}
+                rippleColor={theme.colors.primarySoft}
+                style={[
+                  styles.projectSelectorCard,
+                  {
+                    backgroundColor: getProjectSelectorBackground(
+                      theme,
+                      selectedFilterProject.color,
+                      filterProject !== "todos"
+                    ),
+                    borderColor: getProjectSelectorBorder(
+                      theme,
+                      selectedFilterProject.color,
+                      filterProject !== "todos"
+                    ),
+                  },
+                ]}
+              >
+                <View style={styles.projectSelectorContent}>
+                  <ProjectSmallIcon
                     theme={theme}
-                    onPress={() => setFilterProject(project.id)}
+                    color={selectedFilterProject.color}
+                    logoUrl={selectedFilterProject.logoUrl}
+                    icon={selectedFilterProject.icon}
                   />
-                ))}
-              </View>
+
+                  <View style={styles.projectSelectorText}>
+                    <Text
+                      style={[
+                        styles.projectSelectorTitle,
+                        {
+                          color:
+                            filterProject === "todos"
+                              ? theme.colors.text
+                              : selectedFilterProject.color,
+                        },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {selectedFilterProject.name}
+                    </Text>
+
+                    <Text
+                      style={[
+                        styles.projectSelectorSubtitle,
+                        { color: theme.colors.secondary },
+                      ]}
+                    >
+                      Tocá para elegir un proyecto
+                    </Text>
+                  </View>
+
+                  <MaterialCommunityIcons
+                    name={
+                      filterProjectSelectorOpen ? "chevron-up" : "chevron-down"
+                    }
+                    size={responsive(22, 28)}
+                    color={theme.colors.secondary}
+                  />
+                </View>
+              </TouchableRipple>
+
+              {filterProjectSelectorOpen && (
+                <Card
+                  mode="contained"
+                  style={[
+                    styles.projectOptionsCard,
+                    {
+                      backgroundColor: theme.colors.surface,
+                      borderColor: theme.colors.borderSoft,
+                    },
+                  ]}
+                >
+                  <View style={styles.projectOptionsContent}>
+                    <ProjectDropdownOption
+                      label="Todos los proyectos"
+                      selected={filterProject === "todos"}
+                      color={theme.colors.primary}
+                      theme={theme}
+                      icon="folder-multiple-outline"
+                      onPress={() => {
+                        setFilterProject("todos");
+                        setFilterProjectSelectorOpen(false);
+                      }}
+                    />
+
+                    <ProjectDropdownOption
+                      label="Sin proyecto"
+                      selected={filterProject === "sinProyecto"}
+                      color={theme.colors.paused || "#94A3B8"}
+                      theme={theme}
+                      icon="checkbox-blank-circle"
+                      onPress={() => {
+                        setFilterProject("sinProyecto");
+                        setFilterProjectSelectorOpen(false);
+                      }}
+                    />
+
+                    {projects.map((project) => (
+                      <ProjectDropdownOption
+                        key={project.id}
+                        label={project.name}
+                        selected={filterProject === project.id}
+                        color={project.color || theme.colors.primary}
+                        theme={theme}
+                        logoUrl={project.logoUrl}
+                        icon="folder-outline"
+                        onPress={() => {
+                          setFilterProject(project.id);
+                          setFilterProjectSelectorOpen(false);
+                        }}
+                      />
+                    ))}
+                  </View>
+                </Card>
+              )}
             </View>
           </Card>
         )}
 
         <View style={styles.listInfoRow}>
           <Text style={[styles.listTitle, { color: theme.colors.secondary }]}>
-            {filteredTasks.length} tareas visibles
-          </Text>
-
-          <Text style={[styles.dragHint, { color: theme.colors.secondary }]}>
-            Mantené presionado para ordenar
+            {loading
+              ? "Cargando tareas"
+              : `${filteredTasks.length} tareas visibles`}
           </Text>
         </View>
-
-        {loading && (
-          <View style={styles.loadingBox}>
-            <ActivityIndicator color={theme.colors.primary} />
-          </View>
-        )}
       </View>
     );
   }
 
   function renderEmpty() {
-    if (loading) return null;
+    if (loading) {
+      return <TasksSkeleton theme={theme} />;
+    }
 
     return (
       <Card
@@ -521,7 +773,7 @@ export default function TasksScreen({ theme }) {
           >
             <MaterialCommunityIcons
               name="clipboard-text-outline"
-              size={24}
+              size={responsive(24, 31)}
               color={theme.colors.primary}
             />
           </View>
@@ -538,6 +790,8 @@ export default function TasksScreen({ theme }) {
             mode="contained"
             icon="plus"
             style={styles.emptyButton}
+            labelStyle={styles.emptyButtonLabel}
+            contentStyle={styles.emptyButtonContent}
             onPress={openCreateModal}
           >
             Nueva tarea
@@ -552,10 +806,6 @@ export default function TasksScreen({ theme }) {
     const isDone = task.status === "completada";
     const statusColor = getStatusColor(theme, task.status);
 
-    const projectSoft = theme.dark
-      ? hexToRgba(taskColor, 0.16)
-      : hexToRgba(taskColor, 0.1);
-
     const doneActionColor = isDone ? theme.colors.warning : theme.colors.success;
     const doneActionBg = isDone
       ? theme.colors.warningSoft
@@ -565,6 +815,7 @@ export default function TasksScreen({ theme }) {
       <ScaleDecorator>
         <Card
           mode="contained"
+          onPress={() => openDetailModal(task)}
           style={[
             styles.taskCard,
             {
@@ -590,21 +841,14 @@ export default function TasksScreen({ theme }) {
 
           <View style={styles.taskContent}>
             <View style={styles.taskHeader}>
-              <View style={[styles.projectIcon, { backgroundColor: projectSoft }]}>
-                {task.projectLogoUrl ? (
-                  <Image source={{ uri: task.projectLogoUrl }} style={styles.logo} />
-                ) : task.projectName ? (
-                  <Text style={[styles.logoLetter, { color: taskColor }]}>
-                    {task.projectName.charAt(0).toUpperCase()}
-                  </Text>
-                ) : (
-                  <MaterialCommunityIcons
-                    name="checkbox-blank-circle-outline"
-                    size={22}
-                    color={taskColor}
-                  />
-                )}
-              </View>
+              <ProjectSmallIcon
+                theme={theme}
+                color={taskColor}
+                logoUrl={task.projectLogoUrl}
+                letter={task.projectName?.charAt(0)?.toUpperCase()}
+                icon="checkbox-blank-circle"
+                size="large"
+              />
 
               <View style={styles.taskInfo}>
                 <Text
@@ -630,7 +874,7 @@ export default function TasksScreen({ theme }) {
 
               <IconButton
                 icon="drag-horizontal-variant"
-                size={21}
+                size={responsive(21, 27)}
                 iconColor={theme.colors.secondary}
                 style={styles.dragButton}
                 onLongPress={drag}
@@ -659,7 +903,7 @@ export default function TasksScreen({ theme }) {
             <View style={styles.actionsRow}>
               <IconButton
                 icon={isDone ? "restore" : "check-circle-outline"}
-                size={21}
+                size={responsive(21, 27)}
                 mode="contained-tonal"
                 iconColor={doneActionColor}
                 containerColor={doneActionBg}
@@ -679,7 +923,7 @@ export default function TasksScreen({ theme }) {
               <View style={styles.iconActions}>
                 <IconButton
                   icon="pencil-outline"
-                  size={20}
+                  size={responsive(20, 26)}
                   mode="contained-tonal"
                   iconColor={theme.colors.primary}
                   containerColor={theme.colors.primarySoft}
@@ -689,7 +933,7 @@ export default function TasksScreen({ theme }) {
 
                 <IconButton
                   icon="delete-outline"
-                  size={20}
+                  size={responsive(20, 26)}
                   mode="contained-tonal"
                   iconColor={theme.colors.danger}
                   containerColor={theme.colors.dangerSoft}
@@ -704,10 +948,16 @@ export default function TasksScreen({ theme }) {
     );
   }
 
+  const detailStatusColor = selectedTask
+    ? getStatusColor(theme, selectedTask.status)
+    : theme.colors.primary;
+
+  const detailProjectColor = selectedTask?.projectColor || theme.colors.primary;
+
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <DraggableFlatList
-        data={filteredTasks}
+        data={loading ? [] : filteredTasks}
         keyExtractor={(item) => item.id}
         renderItem={renderTask}
         onDragEnd={handleDragEnd}
@@ -746,7 +996,7 @@ export default function TasksScreen({ theme }) {
 
               <IconButton
                 icon="close"
-                size={21}
+                size={responsive(21, 27)}
                 iconColor={theme.colors.secondary}
                 style={styles.closeButton}
                 onPress={() => {
@@ -756,7 +1006,11 @@ export default function TasksScreen({ theme }) {
               />
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false}>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.modalScrollContent}
+              keyboardShouldPersistTaps="handled"
+            >
               <TextInput
                 label="Título"
                 value={title}
@@ -764,6 +1018,7 @@ export default function TasksScreen({ theme }) {
                 mode="outlined"
                 style={styles.input}
                 outlineStyle={styles.inputOutline}
+                contentStyle={styles.inputContent}
               />
 
               <TextInput
@@ -775,32 +1030,114 @@ export default function TasksScreen({ theme }) {
                 numberOfLines={3}
                 style={styles.input}
                 outlineStyle={styles.inputOutline}
+                contentStyle={styles.inputContent}
               />
 
               <FormSection title="Proyecto relacionado" theme={theme} />
 
-              <View style={styles.optionWrap}>
-                <FilterChip
-                  label="Sin proyecto"
-                  selected={!projectId}
-                  color={theme.colors.paused}
-                  icon="checkbox-blank-circle-outline"
-                  theme={theme}
-                  onPress={() => setProjectId(null)}
-                />
-
-                {projects.map((project) => (
-                  <FilterChip
-                    key={project.id}
-                    label={project.name}
-                    selected={projectId === project.id}
-                    color={project.color || theme.colors.primary}
-                    icon="folder-outline"
+              <TouchableRipple
+                onPress={() => setProjectSelectorOpen((prev) => !prev)}
+                rippleColor={theme.colors.primarySoft}
+                style={[
+                  styles.projectSelectorCard,
+                  {
+                    backgroundColor: getProjectSelectorBackground(
+                      theme,
+                      selectedProject?.color || theme.colors.paused || "#94A3B8",
+                      !!selectedProject
+                    ),
+                    borderColor: getProjectSelectorBorder(
+                      theme,
+                      selectedProject?.color || theme.colors.paused || "#94A3B8",
+                      !!selectedProject
+                    ),
+                  },
+                ]}
+              >
+                <View style={styles.projectSelectorContent}>
+                  <ProjectSmallIcon
                     theme={theme}
-                    onPress={() => setProjectId(project.id)}
+                    color={selectedProject?.color || theme.colors.paused || "#94A3B8"}
+                    logoUrl={selectedProject?.logoUrl}
+                    letter={selectedProject?.name?.charAt(0)?.toUpperCase()}
+                    icon={
+                      selectedProject ? "folder-outline" : "checkbox-blank-circle"
+                    }
                   />
-                ))}
-              </View>
+
+                  <View style={styles.projectSelectorText}>
+                    <Text
+                      style={[
+                        styles.projectSelectorTitle,
+                        {
+                          color: selectedProject?.color || theme.colors.text,
+                        },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {selectedProject?.name || "Sin proyecto"}
+                    </Text>
+
+                    <Text
+                      style={[
+                        styles.projectSelectorSubtitle,
+                        { color: theme.colors.secondary },
+                      ]}
+                    >
+                      Tocá para elegir un proyecto
+                    </Text>
+                  </View>
+
+                  <MaterialCommunityIcons
+                    name={projectSelectorOpen ? "chevron-up" : "chevron-down"}
+                    size={responsive(22, 28)}
+                    color={theme.colors.secondary}
+                  />
+                </View>
+              </TouchableRipple>
+
+              {projectSelectorOpen && (
+                <Card
+                  mode="contained"
+                  style={[
+                    styles.projectOptionsCard,
+                    {
+                      backgroundColor: theme.colors.surface,
+                      borderColor: theme.colors.borderSoft,
+                    },
+                  ]}
+                >
+                  <View style={styles.projectOptionsContent}>
+                    <ProjectDropdownOption
+                      label="Sin proyecto"
+                      selected={!projectId}
+                      color={theme.colors.paused || "#94A3B8"}
+                      theme={theme}
+                      icon="checkbox-blank-circle"
+                      onPress={() => {
+                        setProjectId(null);
+                        setProjectSelectorOpen(false);
+                      }}
+                    />
+
+                    {projects.map((project) => (
+                      <ProjectDropdownOption
+                        key={project.id}
+                        label={project.name}
+                        selected={projectId === project.id}
+                        color={project.color || theme.colors.primary}
+                        theme={theme}
+                        logoUrl={project.logoUrl}
+                        icon="folder-outline"
+                        onPress={() => {
+                          setProjectId(project.id);
+                          setProjectSelectorOpen(false);
+                        }}
+                      />
+                    ))}
+                  </View>
+                </Card>
+              )}
 
               <FormSection title="Estado" theme={theme} />
 
@@ -833,6 +1170,133 @@ export default function TasksScreen({ theme }) {
         </View>
       </Modal>
 
+      <Modal visible={detailModalVisible} animationType="fade" transparent>
+        <View style={styles.detailOverlay}>
+          <Card
+            mode="contained"
+            style={[
+              styles.detailModal,
+              {
+                backgroundColor: theme.colors.surface,
+                borderColor: theme.colors.borderSoft,
+              },
+            ]}
+          >
+            <View style={styles.detailContent}>
+              <View style={styles.detailHeader}>
+                <ProjectSmallIcon
+                  theme={theme}
+                  color={detailProjectColor}
+                  logoUrl={selectedTask?.projectLogoUrl}
+                  letter={selectedTask?.projectName?.charAt(0)?.toUpperCase()}
+                  icon="checkbox-blank-circle"
+                  size="detail"
+                />
+
+                <View style={styles.detailHeaderText}>
+                  <Text
+                    style={[
+                      styles.detailProjectName,
+                      { color: theme.colors.secondary },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {selectedTask?.projectName || "Tarea personal"}
+                  </Text>
+
+                  <Text style={[styles.detailTitle, { color: theme.colors.text }]}>
+                    {selectedTask?.title || "Tarea sin título"}
+                  </Text>
+                </View>
+
+                <IconButton
+                  icon="close"
+                  size={responsive(21, 27)}
+                  iconColor={theme.colors.secondary}
+                  style={styles.closeButton}
+                  onPress={closeDetailModal}
+                />
+              </View>
+
+              <View style={styles.detailStatusRow}>
+                <InfoChip
+                  label={getStatusLabel(selectedTask?.status)}
+                  icon={getStatusIcon(selectedTask?.status)}
+                  color={detailStatusColor}
+                  theme={theme}
+                />
+              </View>
+
+              <Divider
+                style={[
+                  styles.detailDivider,
+                  { backgroundColor: theme.colors.borderSoft },
+                ]}
+              />
+
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.detailScrollContent}
+              >
+                <Text style={[styles.detailSectionTitle, { color: theme.colors.text }]}>
+                  Descripción
+                </Text>
+
+                <Text
+                  style={[
+                    styles.detailDescription,
+                    { color: theme.colors.secondary },
+                  ]}
+                >
+                  {selectedTask?.description?.trim()
+                    ? selectedTask.description
+                    : "Esta tarea no tiene descripción."}
+                </Text>
+              </ScrollView>
+
+              <View style={styles.detailActions}>
+                <TouchableRipple
+                  borderless
+                  rippleColor={theme.colors.primarySoft}
+                  style={[
+                    styles.detailEditFancyButton,
+                    {
+                      backgroundColor: theme.colors.primarySoft,
+                      borderColor: hexToRgba(
+                        theme.colors.primary,
+                        theme.dark ? 0.34 : 0.18
+                      ),
+                    },
+                  ]}
+                  onPress={openEditFromDetail}
+                >
+                  <View style={styles.detailEditFancyContent}>
+                    <Text
+                      style={[
+                        styles.detailEditFancyText,
+                        { color: theme.colors.primary },
+                      ]}
+                    >
+                      Editar tarea
+                    </Text>
+                  </View>
+                </TouchableRipple>
+
+                <Button
+                  mode="contained"
+                  style={styles.detailCloseButton}
+                  contentStyle={styles.detailButtonContent}
+                  labelStyle={styles.detailButtonLabel}
+                  onPress={closeDetailModal}
+                >
+                  Cerrar
+                </Button>
+              </View>
+            </View>
+          </Card>
+        </View>
+      </Modal>
+
       <Modal visible={deleteModalVisible} animationType="fade" transparent>
         <View style={styles.deleteOverlay}>
           <Card
@@ -854,7 +1318,7 @@ export default function TasksScreen({ theme }) {
               >
                 <MaterialCommunityIcons
                   name="trash-can-outline"
-                  size={28}
+                  size={responsive(28, 36)}
                   color={theme.colors.danger}
                 />
               </View>
@@ -919,6 +1383,122 @@ export default function TasksScreen({ theme }) {
   );
 }
 
+function ProjectSmallIcon({
+  theme,
+  color,
+  logoUrl,
+  letter,
+  icon = "folder-outline",
+  size = "normal",
+}) {
+  const boxStyle =
+    size === "large"
+      ? styles.projectIcon
+      : size === "detail"
+      ? styles.detailProjectIcon
+      : styles.projectSelectorIconBox;
+
+  const iconSize =
+    size === "detail"
+      ? responsive(21, 28)
+      : size === "large"
+      ? responsive(20, 27)
+      : responsive(19, 25);
+
+  return (
+    <View
+      style={[
+        boxStyle,
+        {
+          backgroundColor: getProjectIconBackground(theme, color),
+          borderColor: getProjectIconBorder(theme, color),
+        },
+      ]}
+    >
+      {logoUrl ? (
+        <Image source={{ uri: logoUrl }} style={styles.logo} />
+      ) : letter ? (
+        <Text
+          style={[
+            size === "detail" ? styles.detailProjectLetter : styles.logoLetter,
+            { color },
+          ]}
+        >
+          {letter}
+        </Text>
+      ) : (
+        <MaterialCommunityIcons name={icon} size={iconSize} color={color} />
+      )}
+    </View>
+  );
+}
+
+function ProjectDropdownOption({
+  label,
+  selected,
+  color,
+  theme,
+  logoUrl,
+  icon = "folder-outline",
+  onPress,
+}) {
+  return (
+    <TouchableRipple
+      onPress={onPress}
+      rippleColor={hexToRgba(color, 0.12)}
+      style={[
+        styles.projectDropdownOption,
+        {
+          backgroundColor: getProjectSelectorBackground(theme, color, selected),
+          borderColor: getProjectSelectorBorder(theme, color, selected),
+        },
+      ]}
+    >
+      <View style={styles.projectDropdownContent}>
+        <View
+          style={[
+            styles.projectDropdownIcon,
+            {
+              backgroundColor: getProjectIconBackground(theme, color),
+              borderColor: getProjectIconBorder(theme, color),
+            },
+          ]}
+        >
+          {logoUrl ? (
+            <Image source={{ uri: logoUrl }} style={styles.logo} />
+          ) : (
+            <MaterialCommunityIcons
+              name={icon}
+              size={responsive(19, 25)}
+              color={color}
+            />
+          )}
+        </View>
+
+        <Text
+          style={[
+            styles.projectDropdownText,
+            {
+              color: selected ? color : theme.colors.text,
+            },
+          ]}
+          numberOfLines={1}
+        >
+          {label}
+        </Text>
+
+        {selected && (
+          <MaterialCommunityIcons
+            name="check-circle-outline"
+            size={responsive(19, 25)}
+            color={color}
+          />
+        )}
+      </View>
+    </TouchableRipple>
+  );
+}
+
 function InfoChip({ label, icon, color, theme }) {
   const bg = theme.dark ? hexToRgba(color, 0.16) : hexToRgba(color, 0.09);
   const border = theme.dark ? hexToRgba(color, 0.22) : hexToRgba(color, 0.14);
@@ -933,7 +1513,11 @@ function InfoChip({ label, icon, color, theme }) {
         },
       ]}
     >
-      <MaterialCommunityIcons name={icon} size={14} color={color} />
+      <MaterialCommunityIcons
+        name={icon}
+        size={responsive(14, 18)}
+        color={color}
+      />
 
       <Text style={[styles.infoChipText, { color }]} numberOfLines={1}>
         {label}
@@ -943,40 +1527,43 @@ function InfoChip({ label, icon, color, theme }) {
 }
 
 function FilterChip({ label, selected, color, icon, theme, onPress }) {
-  const selectedBg = theme.dark
-    ? hexToRgba(color, 0.18)
-    : hexToRgba(color, 0.1);
-
-  const defaultBg = theme.dark
-    ? "rgba(255,255,255,0.04)"
-    : "rgba(15,23,42,0.04)";
-
-  const selectedBorder = theme.dark
-    ? hexToRgba(color, 0.28)
-    : hexToRgba(color, 0.18);
+  const bg = getSelectableChipBackground(theme, color, selected, label);
+  const border = getSelectableChipBorder(theme, color, selected, label);
+  const textColor = selected ? color : theme.colors.secondary;
+  const iconColor = selected ? color : theme.colors.secondary;
 
   return (
-    <Chip
-      compact
-      selected={selected}
-      icon={icon}
+    <TouchableRipple
       onPress={onPress}
+      rippleColor={hexToRgba(color, 0.12)}
       style={[
         styles.filterChip,
         {
-          backgroundColor: selected ? selectedBg : defaultBg,
-          borderColor: selected ? selectedBorder : theme.colors.borderSoft,
-        },
-      ]}
-      textStyle={[
-        styles.filterChipText,
-        {
-          color: selected ? color : theme.colors.secondary,
+          backgroundColor: bg,
+          borderColor: border,
         },
       ]}
     >
-      {label}
-    </Chip>
+      <View style={styles.filterChipContent}>
+        <MaterialCommunityIcons
+          name={icon}
+          size={responsive(15, 19)}
+          color={iconColor}
+        />
+
+        <Text
+          style={[
+            styles.filterChipText,
+            {
+              color: textColor,
+            },
+          ]}
+          numberOfLines={1}
+        >
+          {label}
+        </Text>
+      </View>
+    </TouchableRipple>
   );
 }
 
@@ -988,19 +1575,150 @@ function FormSection({ title, theme }) {
   );
 }
 
+function TasksSkeleton({ theme }) {
+  const skeletonColor = theme.dark
+    ? "rgba(255,255,255,0.08)"
+    : "rgba(15,23,42,0.07)";
+
+  const skeletonStrongColor = theme.dark
+    ? "rgba(255,255,255,0.12)"
+    : "rgba(15,23,42,0.11)";
+
+  return (
+    <View>
+      {[1, 2, 3, 4].map((item) => (
+        <Card
+          key={item}
+          mode="contained"
+          style={[
+            styles.taskCard,
+            {
+              backgroundColor: theme.colors.surface,
+              borderColor: theme.colors.borderSoft,
+            },
+          ]}
+        >
+          <View style={styles.taskAccentWrap}>
+            <View
+              style={[
+                styles.taskAccent,
+                {
+                  backgroundColor: skeletonStrongColor,
+                },
+              ]}
+            />
+          </View>
+
+          <View style={styles.taskContent}>
+            <View style={styles.taskHeader}>
+              <View
+                style={[
+                  styles.skeletonProjectIcon,
+                  { backgroundColor: skeletonStrongColor },
+                ]}
+              />
+
+              <View style={styles.taskInfo}>
+                <View
+                  style={[
+                    styles.skeletonTitle,
+                    { backgroundColor: skeletonStrongColor },
+                  ]}
+                />
+
+                <View
+                  style={[
+                    styles.skeletonSubtitle,
+                    { backgroundColor: skeletonColor },
+                  ]}
+                />
+              </View>
+
+              <View
+                style={[
+                  styles.skeletonDrag,
+                  { backgroundColor: skeletonColor },
+                ]}
+              />
+            </View>
+
+            <View
+              style={[
+                styles.skeletonDescription,
+                { backgroundColor: skeletonColor },
+              ]}
+            />
+
+            <View
+              style={[
+                styles.skeletonDescriptionSmall,
+                { backgroundColor: skeletonColor },
+              ]}
+            />
+
+            <View
+              style={[
+                styles.taskDivider,
+                {
+                  backgroundColor: theme.colors.borderSoft,
+                },
+              ]}
+            />
+
+            <View style={styles.actionsRow}>
+              <View
+                style={[
+                  styles.skeletonAction,
+                  { backgroundColor: skeletonStrongColor },
+                ]}
+              />
+
+              <View
+                style={[
+                  styles.skeletonChip,
+                  { backgroundColor: skeletonStrongColor },
+                ]}
+              />
+
+              <View style={styles.iconActions}>
+                <View
+                  style={[
+                    styles.skeletonAction,
+                    { backgroundColor: skeletonStrongColor },
+                  ]}
+                />
+
+                <View
+                  style={[
+                    styles.skeletonAction,
+                    { backgroundColor: skeletonStrongColor },
+                  ]}
+                />
+              </View>
+            </View>
+          </View>
+        </Card>
+      ))}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
 
   content: {
-    paddingHorizontal: 20,
-    paddingTop: 6,
-    paddingBottom: 135,
+    width: "100%",
+    maxWidth: responsive(undefined, 860),
+    alignSelf: "center",
+    paddingHorizontal: responsive(20, 34),
+    paddingTop: responsive(6, 18),
+    paddingBottom: responsive(155, 185),
   },
 
   header: {
-    marginBottom: 18,
+    marginBottom: responsive(18, 26),
   },
 
   titleRow: {
@@ -1009,10 +1727,10 @@ const styles = StyleSheet.create({
   },
 
   sectionMarker: {
-    width: 5,
-    height: 28,
+    width: responsive(5, 6),
+    height: responsive(28, 34),
     borderRadius: 999,
-    marginRight: 10,
+    marginRight: responsive(10, 13),
   },
 
   title: {
@@ -1021,51 +1739,51 @@ const styles = StyleSheet.create({
   },
 
   subtitle: {
-    marginTop: 7,
-    fontSize: 13.5,
-    lineHeight: 19,
-    maxWidth: 330,
+    marginTop: responsive(7, 10),
+    fontSize: responsive(13.5, 16),
+    lineHeight: responsive(19, 23),
+    maxWidth: responsive(330, 520),
   },
 
   createButton: {
     width: "100%",
-    borderRadius: 18,
+    borderRadius: responsive(18, 22),
     elevation: 0,
-    marginBottom: 14,
+    marginBottom: responsive(14, 20),
   },
 
   createButtonContent: {
-    height: 50,
+    height: responsive(50, 60),
   },
 
   createButtonLabel: {
     fontWeight: "900",
-    fontSize: 14,
+    fontSize: responsive(14, 16),
   },
 
   activeFiltersCard: {
-    borderRadius: 22,
+    borderRadius: responsive(22, 28),
     borderWidth: 1,
     elevation: 0,
     overflow: "hidden",
-    marginBottom: 10,
+    marginBottom: responsive(10, 16),
   },
 
   activeFiltersContent: {
-    minHeight: 66,
+    minHeight: responsive(66, 82),
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingHorizontal: responsive(14, 20),
+    paddingVertical: responsive(10, 14),
   },
 
   smallIconBox: {
-    width: 40,
-    height: 40,
-    borderRadius: 14,
+    width: responsive(40, 52),
+    height: responsive(40, 52),
+    borderRadius: responsive(14, 18),
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 12,
+    marginRight: responsive(12, 16),
   },
 
   activeFiltersText: {
@@ -1073,130 +1791,145 @@ const styles = StyleSheet.create({
   },
 
   activeFiltersTitle: {
-    fontSize: 14.5,
+    fontSize: responsive(14.5, 17),
     fontWeight: "850",
   },
 
   activeFiltersSubtitle: {
-    marginTop: 2,
-    fontSize: 12.5,
-    lineHeight: 17,
+    marginTop: responsive(2, 4),
+    fontSize: responsive(12.5, 15),
+    lineHeight: responsive(17, 21),
   },
 
   filtersCard: {
-    borderRadius: 24,
+    borderRadius: responsive(24, 30),
     borderWidth: 1,
     elevation: 0,
     overflow: "hidden",
-    marginBottom: 12,
+    marginBottom: responsive(12, 18),
   },
 
   filtersContent: {
-    padding: 14,
+    padding: responsive(14, 22),
   },
 
   filterTitle: {
-    fontSize: 13,
+    fontSize: responsive(13, 16),
     fontWeight: "900",
-    marginBottom: 10,
+    marginBottom: responsive(10, 14),
   },
 
   chipsWrap: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 8,
+    gap: responsive(8, 11),
   },
 
   filterChip: {
     borderWidth: 1,
     borderRadius: 999,
+    overflow: "hidden",
     marginBottom: 2,
   },
 
+  filterChipContent: {
+    minHeight: responsive(32, 39),
+    paddingHorizontal: responsive(11, 15),
+    paddingVertical: responsive(7, 9),
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
   filterChipText: {
-    fontSize: 12,
+    marginLeft: responsive(6, 8),
+    fontSize: responsive(12, 14),
     fontWeight: "850",
+    maxWidth: responsive(160, 230),
   },
 
   filterDivider: {
     height: 1,
-    marginVertical: 14,
+    marginVertical: responsive(14, 20),
   },
 
   listInfoRow: {
-    marginTop: 4,
-    marginBottom: 10,
+    marginTop: responsive(4, 8),
+    marginBottom: responsive(10, 14),
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
 
   listTitle: {
-    fontSize: 12,
+    fontSize: responsive(12, 14),
     fontWeight: "900",
     letterSpacing: 0.4,
     textTransform: "uppercase",
   },
 
   dragHint: {
-    fontSize: 11.5,
+    fontSize: responsive(11.5, 13.5),
     fontWeight: "700",
   },
 
-  loadingBox: {
-    minHeight: 160,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
   emptyCard: {
-    borderRadius: 24,
+    borderRadius: responsive(24, 30),
     borderWidth: 1,
     elevation: 0,
     overflow: "hidden",
-    marginTop: 4,
+    marginTop: responsive(4, 8),
   },
 
   emptyContent: {
     alignItems: "center",
-    padding: 22,
+    padding: responsive(22, 34),
   },
 
   emptyIconBox: {
-    width: 52,
-    height: 52,
-    borderRadius: 18,
+    width: responsive(52, 68),
+    height: responsive(52, 68),
+    borderRadius: responsive(18, 23),
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 14,
+    marginBottom: responsive(14, 20),
   },
 
   emptyTitle: {
-    fontSize: 18,
+    fontSize: responsive(18, 23),
     fontWeight: "900",
     letterSpacing: -0.2,
-    marginBottom: 5,
+    marginBottom: responsive(5, 8),
     textAlign: "center",
   },
 
   emptyText: {
-    fontSize: 13,
-    lineHeight: 19,
+    fontSize: responsive(13, 16),
+    lineHeight: responsive(19, 23),
     textAlign: "center",
-    marginBottom: 16,
+    marginBottom: responsive(16, 22),
+    maxWidth: responsive(undefined, 470),
   },
 
   emptyButton: {
-    borderRadius: 16,
+    borderRadius: responsive(16, 20),
+  },
+
+  emptyButtonContent: {
+    height: responsive(44, 54),
+  },
+
+  emptyButtonLabel: {
+    fontSize: responsive(14, 16),
+    fontWeight: "900",
   },
 
   taskCard: {
     position: "relative",
-    borderRadius: 24,
+    borderRadius: responsive(24, 30),
     borderWidth: 1,
     elevation: 0,
     overflow: "hidden",
-    marginBottom: 12,
+    marginBottom: responsive(12, 18),
   },
 
   taskAccentWrap: {
@@ -1204,7 +1937,7 @@ const styles = StyleSheet.create({
     left: 0,
     top: 0,
     bottom: 0,
-    width: 5,
+    width: responsive(5, 6),
   },
 
   taskAccent: {
@@ -1212,8 +1945,8 @@ const styles = StyleSheet.create({
   },
 
   taskContent: {
-    padding: 15,
-    paddingLeft: 18,
+    padding: responsive(15, 22),
+    paddingLeft: responsive(18, 26),
   },
 
   taskHeader: {
@@ -1222,13 +1955,14 @@ const styles = StyleSheet.create({
   },
 
   projectIcon: {
-    width: 46,
-    height: 46,
-    borderRadius: 16,
+    width: responsive(46, 60),
+    height: responsive(46, 60),
+    borderRadius: responsive(16, 21),
+    borderWidth: 1,
     justifyContent: "center",
     alignItems: "center",
     overflow: "hidden",
-    marginRight: 12,
+    marginRight: responsive(12, 16),
   },
 
   logo: {
@@ -1237,7 +1971,7 @@ const styles = StyleSheet.create({
   },
 
   logoLetter: {
-    fontSize: 20,
+    fontSize: responsive(20, 27),
     fontWeight: "900",
   },
 
@@ -1246,15 +1980,15 @@ const styles = StyleSheet.create({
   },
 
   taskTitle: {
-    fontSize: 16,
+    fontSize: responsive(16, 20),
     fontWeight: "900",
     letterSpacing: -0.25,
-    lineHeight: 21,
+    lineHeight: responsive(21, 26),
   },
 
   projectName: {
-    marginTop: 3,
-    fontSize: 12.5,
+    marginTop: responsive(3, 5),
+    fontSize: responsive(12.5, 15),
     fontWeight: "700",
   },
 
@@ -1264,19 +1998,19 @@ const styles = StyleSheet.create({
   },
 
   description: {
-    marginTop: 12,
-    fontSize: 13,
-    lineHeight: 19,
+    marginTop: responsive(12, 16),
+    fontSize: responsive(13, 16),
+    lineHeight: responsive(19, 24),
   },
 
   taskDivider: {
     height: 1,
-    marginTop: 14,
-    marginBottom: 10,
+    marginTop: responsive(14, 20),
+    marginBottom: responsive(10, 14),
   },
 
   actionsRow: {
-    minHeight: 42,
+    minHeight: responsive(42, 52),
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -1289,7 +2023,7 @@ const styles = StyleSheet.create({
   centerStatusChip: {
     flex: 1,
     alignItems: "center",
-    paddingHorizontal: 8,
+    paddingHorizontal: responsive(8, 12),
   },
 
   iconActions: {
@@ -1299,22 +2033,22 @@ const styles = StyleSheet.create({
 
   actionIcon: {
     margin: 0,
-    marginLeft: 4,
+    marginLeft: responsive(4, 7),
   },
 
   infoChip: {
-    maxWidth: 150,
-    height: 30,
+    maxWidth: responsive(150, 210),
+    height: responsive(30, 38),
     borderRadius: 999,
     borderWidth: 1,
-    paddingHorizontal: 9,
+    paddingHorizontal: responsive(9, 13),
     flexDirection: "row",
     alignItems: "center",
   },
 
   infoChipText: {
-    marginLeft: 5,
-    fontSize: 11.5,
+    marginLeft: responsive(5, 7),
+    fontSize: responsive(11.5, 13.5),
     fontWeight: "900",
   },
 
@@ -1325,42 +2059,49 @@ const styles = StyleSheet.create({
   },
 
   modal: {
-    maxHeight: "92%",
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
+    width: "100%",
+    maxWidth: responsive(undefined, 760),
+    alignSelf: "center",
+    maxHeight: responsive("92%", "88%"),
+    borderTopLeftRadius: responsive(30, 34),
+    borderTopRightRadius: responsive(30, 34),
     borderWidth: 1,
     borderBottomWidth: 0,
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-    paddingTop: 10,
+    paddingHorizontal: responsive(20, 32),
+    paddingBottom: responsive(40, 48),
+    paddingTop: responsive(10, 14),
+  },
+
+  modalScrollContent: {
+    paddingBottom: responsive(34, 44),
   },
 
   modalHandle: {
     alignSelf: "center",
-    width: 44,
-    height: 5,
+    width: responsive(44, 56),
+    height: responsive(5, 6),
     borderRadius: 999,
     backgroundColor: "rgba(148,163,184,0.45)",
-    marginBottom: 14,
+    marginBottom: responsive(14, 20),
   },
 
   modalHeader: {
     flexDirection: "row",
     alignItems: "flex-start",
     justifyContent: "space-between",
-    marginBottom: 16,
+    marginBottom: responsive(16, 22),
   },
 
   modalTitle: {
-    fontSize: 22,
+    fontSize: responsive(22, 28),
     fontWeight: "900",
     letterSpacing: -0.4,
   },
 
   modalSubtitle: {
-    marginTop: 3,
-    fontSize: 13,
-    lineHeight: 18,
+    marginTop: responsive(3, 5),
+    fontSize: responsive(13, 16),
+    lineHeight: responsive(18, 23),
   },
 
   closeButton: {
@@ -1368,40 +2109,271 @@ const styles = StyleSheet.create({
   },
 
   input: {
-    marginBottom: 12,
+    marginBottom: responsive(12, 16),
+  },
+
+  inputContent: {
+    fontSize: responsive(14, 16),
   },
 
   inputOutline: {
-    borderRadius: 16,
+    borderRadius: responsive(16, 20),
   },
 
   formSectionTitle: {
-    fontSize: 14,
+    fontSize: responsive(14, 17),
     fontWeight: "900",
-    marginTop: 8,
-    marginBottom: 10,
+    marginTop: responsive(8, 12),
+    marginBottom: responsive(10, 14),
+  },
+
+  projectSelectorCard: {
+    borderRadius: responsive(20, 26),
+    borderWidth: 1,
+    overflow: "hidden",
+    marginBottom: responsive(12, 16),
+  },
+
+  projectSelectorContent: {
+    minHeight: responsive(62, 78),
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: responsive(13, 18),
+    paddingVertical: responsive(10, 14),
+  },
+
+  projectSelectorIconBox: {
+    width: responsive(42, 54),
+    height: responsive(42, 54),
+    borderRadius: responsive(15, 19),
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: responsive(12, 16),
+    overflow: "hidden",
+  },
+
+  projectSelectorText: {
+    flex: 1,
+  },
+
+  projectSelectorTitle: {
+    fontSize: responsive(14.5, 17),
+    fontWeight: "900",
+  },
+
+  projectSelectorSubtitle: {
+    marginTop: responsive(2, 4),
+    fontSize: responsive(12.5, 15),
+    fontWeight: "700",
+  },
+
+  projectOptionsCard: {
+    borderRadius: responsive(22, 28),
+    borderWidth: 1,
+    elevation: 0,
+    overflow: "hidden",
+    marginBottom: responsive(14, 20),
+  },
+
+  projectOptionsContent: {
+    padding: responsive(12, 18),
+    gap: responsive(8, 11),
+  },
+
+  projectDropdownOption: {
+    borderRadius: responsive(18, 22),
+    borderWidth: 1,
+    overflow: "hidden",
+  },
+
+  projectDropdownContent: {
+    minHeight: responsive(54, 68),
+    paddingHorizontal: responsive(11, 16),
+    paddingVertical: responsive(8, 12),
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  projectDropdownIcon: {
+    width: responsive(36, 48),
+    height: responsive(36, 48),
+    borderRadius: responsive(13, 17),
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: responsive(10, 14),
+    overflow: "hidden",
+  },
+
+  projectDropdownText: {
+    flex: 1,
+    fontSize: responsive(13.5, 16),
+    fontWeight: "900",
   },
 
   optionWrap: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 8,
-    marginBottom: 14,
+    gap: responsive(8, 11),
+    marginBottom: responsive(14, 20),
   },
 
   saveButton: {
-    borderRadius: 18,
-    marginTop: 12,
-    marginBottom: 10,
+    borderRadius: responsive(18, 22),
+    marginTop: responsive(12, 18),
+    marginBottom: responsive(24, 30),
     elevation: 0,
   },
 
   saveButtonContent: {
-    height: 50,
+    height: responsive(52, 62),
   },
 
   saveButtonLabel: {
-    fontSize: 14,
+    fontSize: responsive(14, 16),
+    fontWeight: "900",
+  },
+
+  detailOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.42)",
+    justifyContent: "center",
+    paddingHorizontal: responsive(20, 34),
+  },
+
+  detailModal: {
+    width: "100%",
+    maxWidth: responsive(undefined, 680),
+    alignSelf: "center",
+    maxHeight: responsive("82%", "78%"),
+    borderRadius: responsive(30, 36),
+    borderWidth: 1,
+    elevation: 0,
+    overflow: "hidden",
+  },
+
+  detailContent: {
+    padding: responsive(18, 28),
+  },
+
+  detailHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+  },
+
+  detailProjectIcon: {
+    width: responsive(50, 66),
+    height: responsive(50, 66),
+    borderRadius: responsive(18, 23),
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+    marginRight: responsive(12, 16),
+  },
+
+  detailProjectLetter: {
+    fontSize: responsive(21, 29),
+    fontWeight: "900",
+  },
+
+  detailHeaderText: {
+    flex: 1,
+    paddingTop: responsive(2, 4),
+  },
+
+  detailProjectName: {
+    fontSize: responsive(12.5, 15),
+    fontWeight: "800",
+    marginBottom: responsive(4, 6),
+  },
+
+  detailTitle: {
+    fontSize: responsive(20, 26),
+    fontWeight: "900",
+    letterSpacing: -0.35,
+    lineHeight: responsive(26, 33),
+  },
+
+  detailStatusRow: {
+    marginTop: responsive(16, 22),
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  detailDivider: {
+    height: 1,
+    marginTop: responsive(16, 22),
+    marginBottom: responsive(14, 20),
+  },
+
+  detailScrollContent: {
+    paddingBottom: responsive(18, 26),
+  },
+
+  detailSectionTitle: {
+    fontSize: responsive(13, 15),
+    fontWeight: "900",
+    marginBottom: responsive(8, 12),
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+  },
+
+  detailDescription: {
+    fontSize: responsive(14.5, 17),
+    lineHeight: responsive(22, 27),
+    fontWeight: "600",
+  },
+
+  detailActions: {
+    flexDirection: "row",
+    gap: responsive(10, 14),
+    marginTop: responsive(14, 22),
+  },
+
+  detailEditFancyButton: {
+    flex: 1.15,
+    borderRadius: responsive(16, 20),
+    borderWidth: 1,
+    overflow: "hidden",
+  },
+
+  detailEditFancyContent: {
+    height: responsive(48, 58),
+    paddingLeft: responsive(8, 12),
+    paddingRight: responsive(14, 18),
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  detailEditIconBox: {
+    width: responsive(31, 38),
+    height: responsive(31, 38),
+    borderRadius: 999,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: responsive(8, 10),
+  },
+
+  detailEditFancyText: {
+    fontSize: responsive(13.5, 16),
+    fontWeight: "900",
+  },
+
+  detailCloseButton: {
+    flex: 0.85,
+    borderRadius: responsive(16, 20),
+    elevation: 0,
+  },
+
+  detailButtonContent: {
+    height: responsive(48, 58),
+  },
+
+  detailButtonLabel: {
+    fontSize: responsive(13.5, 16),
     fontWeight: "900",
   },
 
@@ -1409,55 +2381,58 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.42)",
     justifyContent: "center",
-    paddingHorizontal: 22,
+    paddingHorizontal: responsive(22, 34),
   },
 
   deleteModal: {
-    borderRadius: 28,
+    width: "100%",
+    maxWidth: responsive(undefined, 560),
+    alignSelf: "center",
+    borderRadius: responsive(28, 34),
     borderWidth: 1,
     elevation: 0,
     overflow: "hidden",
   },
 
   deleteContent: {
-    padding: 22,
+    padding: responsive(22, 32),
     alignItems: "center",
   },
 
   deleteIconBox: {
-    width: 58,
-    height: 58,
-    borderRadius: 20,
+    width: responsive(58, 74),
+    height: responsive(58, 74),
+    borderRadius: responsive(20, 25),
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 16,
+    marginBottom: responsive(16, 22),
   },
 
   deleteTitle: {
-    fontSize: 21,
+    fontSize: responsive(21, 27),
     fontWeight: "900",
     letterSpacing: -0.35,
     textAlign: "center",
   },
 
   deleteText: {
-    marginTop: 8,
-    fontSize: 13.5,
-    lineHeight: 20,
+    marginTop: responsive(8, 12),
+    fontSize: responsive(13.5, 16),
+    lineHeight: responsive(20, 24),
     textAlign: "center",
   },
 
   deleteTaskPreview: {
     width: "100%",
-    borderRadius: 18,
+    borderRadius: responsive(18, 22),
     borderWidth: 1,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    marginTop: 16,
+    paddingHorizontal: responsive(14, 20),
+    paddingVertical: responsive(12, 16),
+    marginTop: responsive(16, 22),
   },
 
   deleteTaskTitle: {
-    fontSize: 14,
+    fontSize: responsive(14, 17),
     fontWeight: "850",
     textAlign: "center",
   },
@@ -1465,33 +2440,85 @@ const styles = StyleSheet.create({
   deleteActions: {
     width: "100%",
     flexDirection: "row",
-    gap: 10,
-    marginTop: 20,
+    gap: responsive(10, 14),
+    marginTop: responsive(20, 28),
   },
 
   cancelDeleteButton: {
     flex: 1,
-    borderRadius: 16,
+    borderRadius: responsive(16, 20),
     elevation: 0,
   },
 
   confirmDeleteButton: {
     flex: 1,
-    borderRadius: 16,
+    borderRadius: responsive(16, 20),
     elevation: 0,
   },
 
   deleteButtonContent: {
-    height: 48,
+    height: responsive(48, 58),
   },
 
   cancelDeleteLabel: {
-    fontSize: 13.5,
+    fontSize: responsive(13.5, 16),
     fontWeight: "900",
   },
 
   confirmDeleteLabel: {
-    fontSize: 13.5,
+    fontSize: responsive(13.5, 16),
     fontWeight: "900",
+  },
+
+  skeletonProjectIcon: {
+    width: responsive(46, 60),
+    height: responsive(46, 60),
+    borderRadius: responsive(16, 21),
+    marginRight: responsive(12, 16),
+  },
+
+  skeletonTitle: {
+    width: "82%",
+    height: responsive(17, 22),
+    borderRadius: 999,
+    marginBottom: responsive(8, 11),
+  },
+
+  skeletonSubtitle: {
+    width: "58%",
+    height: responsive(12, 15),
+    borderRadius: 999,
+  },
+
+  skeletonDrag: {
+    width: responsive(28, 36),
+    height: responsive(28, 36),
+    borderRadius: 999,
+  },
+
+  skeletonDescription: {
+    width: "94%",
+    height: responsive(13, 16),
+    borderRadius: 999,
+    marginTop: responsive(14, 19),
+  },
+
+  skeletonDescriptionSmall: {
+    width: "68%",
+    height: responsive(13, 16),
+    borderRadius: 999,
+    marginTop: responsive(8, 11),
+  },
+
+  skeletonAction: {
+    width: responsive(40, 50),
+    height: responsive(40, 50),
+    borderRadius: 999,
+  },
+
+  skeletonChip: {
+    width: responsive(112, 145),
+    height: responsive(30, 38),
+    borderRadius: 999,
   },
 });

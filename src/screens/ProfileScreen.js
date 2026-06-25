@@ -1,6 +1,6 @@
 //Importaciones:
 import React, { useState } from "react";
-import { Modal, ScrollView, StyleSheet, View } from "react-native";
+import { Dimensions, Modal, ScrollView, StyleSheet, View } from "react-native";
 import {
   Avatar,
   Button,
@@ -11,6 +11,14 @@ import {
 } from "react-native-paper";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useAuth } from "../context/AuthContext";
+
+//Responsive:
+const { width } = Dimensions.get("window");
+const IS_TABLET = width >= 768;
+
+const responsive = (mobile, tablet) => {
+  return IS_TABLET ? tablet : mobile;
+};
 
 //JS:
 function InfoRow({
@@ -33,7 +41,11 @@ function InfoRow({
     <>
       <View style={styles.row}>
         <View style={[styles.iconBox, { backgroundColor: softColor }]}>
-          <MaterialCommunityIcons name={icon} size={21} color={chipColor} />
+          <MaterialCommunityIcons
+            name={icon}
+            size={responsive(21, 27)}
+            color={chipColor}
+          />
         </View>
 
         <View style={styles.rowText}>
@@ -98,7 +110,7 @@ function SwitchRow({ theme, isDarkMode, setIsDarkMode, showDivider }) {
         >
           <MaterialCommunityIcons
             name="theme-light-dark"
-            size={21}
+            size={responsive(21, 27)}
             color={theme.colors.primary}
           />
         </View>
@@ -161,7 +173,7 @@ export default function ProfileScreen({ theme, isDarkMode, setIsDarkMode }) {
           />
 
           <Text
-            variant="headlineSmall"
+            variant={IS_TABLET ? "headlineMedium" : "headlineSmall"}
             style={[styles.title, { color: theme.colors.text }]}
           >
             Perfil
@@ -186,7 +198,7 @@ export default function ProfileScreen({ theme, isDarkMode, setIsDarkMode }) {
         <View style={styles.profileContent}>
           <View style={styles.avatarWrap}>
             <Avatar.Text
-              size={62}
+              size={responsive(62, 82)}
               label={initial}
               style={{ backgroundColor: theme.colors.primary }}
               color="#FFFFFF"
@@ -227,7 +239,7 @@ export default function ProfileScreen({ theme, isDarkMode, setIsDarkMode }) {
             >
               <MaterialCommunityIcons
                 name="shield-check-outline"
-                size={15}
+                size={responsive(15, 19)}
                 color={theme.colors.success}
               />
 
@@ -352,7 +364,7 @@ export default function ProfileScreen({ theme, isDarkMode, setIsDarkMode }) {
               >
                 <MaterialCommunityIcons
                   name="logout"
-                  size={28}
+                  size={responsive(28, 36)}
                   color={theme.colors.danger}
                 />
               </View>
@@ -408,13 +420,16 @@ const styles = StyleSheet.create({
   },
 
   content: {
-    paddingHorizontal: 20,
-    paddingTop: 6,
-    paddingBottom: 135,
+    width: "100%",
+    maxWidth: responsive(undefined, 860),
+    alignSelf: "center",
+    paddingHorizontal: responsive(20, 34),
+    paddingTop: responsive(6, 18),
+    paddingBottom: responsive(135, 170),
   },
 
   header: {
-    marginBottom: 18,
+    marginBottom: responsive(18, 26),
   },
 
   titleRow: {
@@ -423,10 +438,10 @@ const styles = StyleSheet.create({
   },
 
   sectionMarker: {
-    width: 5,
-    height: 28,
+    width: responsive(5, 6),
+    height: responsive(28, 34),
     borderRadius: 999,
-    marginRight: 10,
+    marginRight: responsive(10, 13),
   },
 
   title: {
@@ -435,44 +450,44 @@ const styles = StyleSheet.create({
   },
 
   subtitle: {
-    marginTop: 7,
-    fontSize: 13.5,
-    lineHeight: 19,
-    maxWidth: 330,
+    marginTop: responsive(7, 10),
+    fontSize: responsive(13.5, 16),
+    lineHeight: responsive(19, 23),
+    maxWidth: responsive(330, 560),
   },
 
   profileCard: {
-    borderRadius: 24,
+    borderRadius: responsive(24, 30),
     borderWidth: 1,
     elevation: 0,
     overflow: "hidden",
-    marginBottom: 20,
+    marginBottom: responsive(20, 28),
   },
 
   profileContent: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 16,
+    padding: responsive(16, 24),
   },
 
   avatarWrap: {
     position: "relative",
-    marginRight: 14,
+    marginRight: responsive(14, 20),
   },
 
   avatarLabel: {
-    fontSize: 24,
+    fontSize: responsive(24, 32),
     fontWeight: "900",
   },
 
   statusDot: {
     position: "absolute",
-    right: 1,
-    bottom: 2,
-    width: 15,
-    height: 15,
+    right: responsive(1, 2),
+    bottom: responsive(2, 3),
+    width: responsive(15, 19),
+    height: responsive(15, 19),
     borderRadius: 999,
-    borderWidth: 3,
+    borderWidth: responsive(3, 4),
   },
 
   profileInfo: {
@@ -480,121 +495,121 @@ const styles = StyleSheet.create({
   },
 
   name: {
-    fontSize: 19,
+    fontSize: responsive(19, 25),
     fontWeight: "900",
     letterSpacing: -0.3,
   },
 
   email: {
-    marginTop: 3,
-    fontSize: 13,
-    lineHeight: 18,
+    marginTop: responsive(3, 5),
+    fontSize: responsive(13, 16),
+    lineHeight: responsive(18, 23),
   },
 
   badge: {
     flexDirection: "row",
     alignItems: "center",
     alignSelf: "flex-start",
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingHorizontal: responsive(10, 14),
+    paddingVertical: responsive(5, 7),
     borderRadius: 999,
     borderWidth: 1,
-    marginTop: 10,
+    marginTop: responsive(10, 14),
   },
 
   badgeText: {
-    marginLeft: 5,
-    fontSize: 12,
+    marginLeft: responsive(5, 7),
+    fontSize: responsive(12, 14),
     fontWeight: "800",
   },
 
   sectionTitle: {
-    marginBottom: 8,
-    marginLeft: 2,
-    fontSize: 12,
+    marginBottom: responsive(8, 11),
+    marginLeft: responsive(2, 4),
+    fontSize: responsive(12, 14),
     fontWeight: "900",
     letterSpacing: 0.5,
     textTransform: "uppercase",
   },
 
   card: {
-    borderRadius: 22,
+    borderRadius: responsive(22, 30),
     borderWidth: 1,
     elevation: 0,
     overflow: "hidden",
-    marginBottom: 18,
+    marginBottom: responsive(18, 26),
   },
 
   cardContent: {
-    paddingVertical: 2,
+    paddingVertical: responsive(2, 6),
   },
 
   row: {
-    minHeight: 70,
+    minHeight: responsive(70, 88),
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 14,
-    paddingVertical: 9,
+    paddingHorizontal: responsive(14, 22),
+    paddingVertical: responsive(9, 14),
   },
 
   iconBox: {
-    width: 40,
-    height: 40,
-    borderRadius: 14,
+    width: responsive(40, 54),
+    height: responsive(40, 54),
+    borderRadius: responsive(14, 19),
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 12,
+    marginRight: responsive(12, 16),
   },
 
   rowText: {
     flex: 1,
-    paddingRight: 8,
+    paddingRight: responsive(8, 12),
   },
 
   rowTitle: {
-    fontSize: 15,
+    fontSize: responsive(15, 18),
     fontWeight: "800",
     letterSpacing: -0.2,
   },
 
   rowDescription: {
-    marginTop: 2,
-    fontSize: 12.5,
-    lineHeight: 17,
+    marginTop: responsive(2, 4),
+    fontSize: responsive(12.5, 15),
+    lineHeight: responsive(17, 21),
   },
 
   divider: {
-    marginLeft: 66,
+    marginLeft: responsive(66, 92),
     height: 1,
   },
 
   infoChip: {
-    minWidth: 45,
+    minWidth: responsive(45, 58),
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 9,
-    paddingVertical: 5,
+    paddingHorizontal: responsive(9, 12),
+    paddingVertical: responsive(5, 7),
     borderRadius: 999,
     borderWidth: 1,
   },
 
   infoChipText: {
-    fontSize: 11,
+    fontSize: responsive(11, 13),
     fontWeight: "900",
   },
 
   logoutButton: {
-    marginTop: 2,
-    borderRadius: 18,
+    marginTop: responsive(2, 6),
+    borderRadius: responsive(18, 22),
     elevation: 0,
   },
 
   logoutButtonContent: {
-    height: 50,
+    height: responsive(50, 60),
   },
 
   logoutButtonLabel: {
-    fontSize: 14,
+    fontSize: responsive(14, 16),
     fontWeight: "900",
   },
 
@@ -602,69 +617,72 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.42)",
     justifyContent: "center",
-    paddingHorizontal: 22,
+    paddingHorizontal: responsive(22, 34),
   },
 
   logoutModal: {
-    borderRadius: 28,
+    width: "100%",
+    maxWidth: responsive(undefined, 560),
+    alignSelf: "center",
+    borderRadius: responsive(28, 34),
     borderWidth: 1,
     elevation: 0,
     overflow: "hidden",
   },
 
   logoutModalContent: {
-    padding: 22,
+    padding: responsive(22, 32),
     alignItems: "center",
   },
 
   logoutIconBox: {
-    width: 58,
-    height: 58,
-    borderRadius: 20,
+    width: responsive(58, 74),
+    height: responsive(58, 74),
+    borderRadius: responsive(20, 25),
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 16,
+    marginBottom: responsive(16, 22),
   },
 
   logoutModalTitle: {
-    fontSize: 21,
+    fontSize: responsive(21, 27),
     fontWeight: "900",
     letterSpacing: -0.35,
     textAlign: "center",
   },
 
   logoutModalText: {
-    marginTop: 8,
-    fontSize: 13.5,
-    lineHeight: 20,
+    marginTop: responsive(8, 12),
+    fontSize: responsive(13.5, 16),
+    lineHeight: responsive(20, 24),
     textAlign: "center",
   },
 
   logoutActions: {
     width: "100%",
     flexDirection: "row",
-    gap: 10,
-    marginTop: 20,
+    gap: responsive(10, 14),
+    marginTop: responsive(20, 28),
   },
 
   cancelButton: {
     flex: 1,
-    borderRadius: 16,
+    borderRadius: responsive(16, 20),
     elevation: 0,
   },
 
   confirmButton: {
     flex: 1,
-    borderRadius: 16,
+    borderRadius: responsive(16, 20),
     elevation: 0,
   },
 
   modalButtonContent: {
-    height: 48,
+    height: responsive(48, 58),
   },
 
   modalButtonLabel: {
-    fontSize: 13.5,
+    fontSize: responsive(13.5, 16),
     fontWeight: "900",
   },
 });

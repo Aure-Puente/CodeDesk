@@ -1,11 +1,19 @@
 //Importaciones:
 import React, { useEffect, useMemo, useState } from "react";
-import { Alert, Image, Modal, ScrollView, StyleSheet, View } from "react-native";
 import {
-  ActivityIndicator,
+  Alert,
+  Dimensions,
+  Image,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  View,
+} from "react-native";
+import {
   Button,
   Card,
-  Chip,
   Divider,
   IconButton,
   Searchbar,
@@ -31,6 +39,14 @@ import {
 import { db } from "../firebase/firebaseConfig";
 import { useAuth } from "../context/AuthContext";
 
+//Responsive:
+const { width } = Dimensions.get("window");
+const IS_TABLET = width >= 768;
+
+const responsive = (mobile, tablet) => {
+  return IS_TABLET ? tablet : mobile;
+};
+
 //JS:
 const hexToRgba = (hex, alpha = 1) => {
   const clean = String(hex || "").replace("#", "");
@@ -54,6 +70,53 @@ const hexToRgba = (hex, alpha = 1) => {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 };
 
+function getProjectIconBackground(theme, projectColor) {
+  if (theme.dark) {
+    return "rgba(248, 250, 252, 0.94)";
+  }
+
+  return hexToRgba(projectColor, 0.1);
+}
+
+function getProjectIconBorder(theme, projectColor) {
+  if (theme.dark) {
+    return hexToRgba(projectColor, 0.38);
+  }
+
+  return hexToRgba(projectColor, 0.18);
+}
+
+function getProjectSelectorBackground(theme, projectColor, selected) {
+  if (!selected) {
+    return theme.colors.surfaceSoft;
+  }
+
+  if (theme.dark) {
+    return "rgba(248, 250, 252, 0.94)";
+  }
+
+  return hexToRgba(projectColor, 0.09);
+}
+
+function getProjectSelectorBorder(theme, projectColor, selected) {
+  if (!selected) {
+    return theme.colors.borderSoft;
+  }
+
+  if (theme.dark) {
+    return hexToRgba(projectColor, 0.42);
+  }
+
+  return hexToRgba(projectColor, 0.2);
+}
+
+function getSkeletonColors(theme) {
+  return {
+    soft: theme.dark ? "rgba(255,255,255,0.08)" : "rgba(15,23,42,0.07)",
+    strong: theme.dark ? "rgba(255,255,255,0.12)" : "rgba(15,23,42,0.11)",
+  };
+}
+
 export default function NotesScreen({ theme }) {
   const { user } = useAuth();
 
@@ -62,18 +125,23 @@ export default function NotesScreen({ theme }) {
   const [loading, setLoading] = useState(true);
 
   const [modalVisible, setModalVisible] = useState(false);
+  const [detailModalVisible, setDetailModalVisible] = useState(false);
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
 
   const [editingNote, setEditingNote] = useState(null);
+  const [selectedNote, setSelectedNote] = useState(null);
   const [noteToDelete, setNoteToDelete] = useState(null);
 
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [projectId, setProjectId] = useState(null);
+  const [projectSelectorOpen, setProjectSelectorOpen] = useState(false);
 
   const [search, setSearch] = useState("");
   const [filterProject, setFilterProject] = useState("todos");
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [filterProjectSelectorOpen, setFilterProjectSelectorOpen] =
+    useState(false);
 
   useEffect(() => {
     if (!user?.uid) return;
@@ -125,6 +193,45 @@ export default function NotesScreen({ theme }) {
     };
   }, [user]);
 
+  const selectedProject = useMemo(() => {
+    return projects.find((project) => project.id === projectId) || null;
+  }, [projects, projectId]);
+
+  const selectedFilterProject = useMemo(() => {
+    if (filterProject === "todos") {
+      return {
+        id: "todos",
+        name: "Todos los proyectos",
+        color: theme.colors.primary,
+        icon: "folder-multiple-outline",
+        logoUrl: null,
+        isSpecial: true,
+      };
+    }
+
+    if (filterProject === "sinProyecto") {
+      return {
+        id: "sinProyecto",
+        name: "Sin proyecto",
+        color: theme.colors.paused || theme.colors.secondary,
+        icon: "checkbox-blank-circle",
+        logoUrl: null,
+        isSpecial: true,
+      };
+    }
+
+    const project = projects.find((item) => item.id === filterProject);
+
+    return {
+      id: project?.id || "todos",
+      name: project?.name || "Proyecto",
+      color: project?.color || theme.colors.primary,
+      icon: "folder-outline",
+      logoUrl: project?.logoUrl || null,
+      isSpecial: false,
+    };
+  }, [filterProject, projects, theme]);
+
   const activeFiltersCount = useMemo(() => {
     let count = 0;
 
@@ -158,6 +265,7 @@ export default function NotesScreen({ theme }) {
     setTitle("");
     setContent("");
     setProjectId(null);
+    setProjectSelectorOpen(false);
   }
 
   function openCreateModal() {
@@ -170,7 +278,30 @@ export default function NotesScreen({ theme }) {
     setTitle(note.title || "");
     setContent(note.content || "");
     setProjectId(note.projectId || null);
+    setProjectSelectorOpen(false);
     setModalVisible(true);
+  }
+
+  function openDetailModal(note) {
+    setSelectedNote(note);
+    setDetailModalVisible(true);
+  }
+
+  function closeDetailModal() {
+    setSelectedNote(null);
+    setDetailModalVisible(false);
+  }
+
+  function openEditFromDetail() {
+    if (!selectedNote) return;
+
+    const note = selectedNote;
+
+    closeDetailModal();
+
+    setTimeout(() => {
+      openEditModal(note);
+    }, 120);
   }
 
   function openDeleteModal(note) {
@@ -228,6 +359,11 @@ export default function NotesScreen({ theme }) {
 
     try {
       await deleteDoc(doc(db, "notes", noteToDelete.id));
+
+      if (selectedNote?.id === noteToDelete.id) {
+        closeDetailModal();
+      }
+
       closeDeleteModal();
     } catch (error) {
       console.log(error);
@@ -250,43 +386,7 @@ export default function NotesScreen({ theme }) {
   function resetFilters() {
     setSearch("");
     setFilterProject("todos");
-  }
-
-  function ProjectBadge({ item, size = 52 }) {
-    const color = item.projectColor || theme.colors.primary;
-    const logoUrl = item.projectLogoUrl;
-
-    const softColor = theme.dark
-      ? hexToRgba(color, 0.18)
-      : hexToRgba(color, 0.1);
-
-    return (
-      <View
-        style={[
-          styles.projectBadge,
-          {
-            width: size,
-            height: size,
-            borderRadius: size / 3,
-            backgroundColor: softColor,
-          },
-        ]}
-      >
-        {logoUrl ? (
-          <Image source={{ uri: logoUrl }} style={styles.logo} />
-        ) : item.projectName ? (
-          <Text style={[styles.projectLetter, { color }]}>
-            {item.projectName.charAt(0).toUpperCase()}
-          </Text>
-        ) : (
-          <MaterialCommunityIcons
-            name="note-text-outline"
-            size={24}
-            color={theme.colors.primary}
-          />
-        )}
-      </View>
-    );
+    setFilterProjectSelectorOpen(false);
   }
 
   function renderNoteCard(note) {
@@ -294,6 +394,7 @@ export default function NotesScreen({ theme }) {
       <Card
         key={note.id}
         mode="contained"
+        onPress={() => openDetailModal(note)}
         style={[
           styles.noteCard,
           {
@@ -304,7 +405,7 @@ export default function NotesScreen({ theme }) {
       >
         <View style={styles.noteCardContent}>
           <View style={styles.noteHeader}>
-            <ProjectBadge item={note} />
+            <ProjectBadge item={note} theme={theme} size={responsive(52, 68)} />
 
             <View style={styles.noteInfo}>
               <Text
@@ -368,7 +469,7 @@ export default function NotesScreen({ theme }) {
             <View style={styles.iconActions}>
               <IconButton
                 icon="pencil-outline"
-                size={20}
+                size={responsive(20, 26)}
                 mode="contained-tonal"
                 iconColor={theme.colors.primary}
                 containerColor={theme.colors.primarySoft}
@@ -378,7 +479,7 @@ export default function NotesScreen({ theme }) {
 
               <IconButton
                 icon="delete-outline"
-                size={20}
+                size={responsive(20, 26)}
                 mode="contained-tonal"
                 iconColor={theme.colors.danger}
                 containerColor={theme.colors.dangerSoft}
@@ -392,11 +493,14 @@ export default function NotesScreen({ theme }) {
     );
   }
 
+  const detailProjectColor = selectedNote?.projectColor || theme.colors.primary;
+
   return (
     <ScrollView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
     >
       <View style={styles.header}>
         <View style={styles.titleRow}>
@@ -408,7 +512,7 @@ export default function NotesScreen({ theme }) {
           />
 
           <Text
-            variant="headlineSmall"
+            variant={IS_TABLET ? "headlineMedium" : "headlineSmall"}
             style={[styles.title, { color: theme.colors.text }]}
           >
             Mis Notas
@@ -454,7 +558,7 @@ export default function NotesScreen({ theme }) {
             >
               <MaterialCommunityIcons
                 name="filter-variant"
-                size={20}
+                size={responsive(20, 26)}
                 color={theme.colors.primary}
               />
             </View>
@@ -469,6 +573,7 @@ export default function NotesScreen({ theme }) {
                   styles.filtersSubtitle,
                   { color: theme.colors.secondary },
                 ]}
+                numberOfLines={1}
               >
                 {activeFiltersCount > 0
                   ? `${activeFiltersCount} filtro activo`
@@ -496,7 +601,7 @@ export default function NotesScreen({ theme }) {
 
             <MaterialCommunityIcons
               name={filtersOpen ? "chevron-up" : "chevron-down"}
-              size={24}
+              size={responsive(24, 30)}
               color={theme.colors.secondary}
             />
           </View>
@@ -522,37 +627,121 @@ export default function NotesScreen({ theme }) {
 
             <FormSection title="Proyecto" theme={theme} />
 
-            <View style={styles.optionWrap}>
-              <ProjectFilterChip
-                label="Todos"
-                icon="format-list-bulleted"
-                selected={filterProject === "todos"}
-                color={theme.colors.primary}
-                theme={theme}
-                onPress={() => setFilterProject("todos")}
-              />
-
-              <ProjectFilterChip
-                label="Sin proyecto"
-                icon="account-outline"
-                selected={filterProject === "sinProyecto"}
-                color={theme.colors.secondary}
-                theme={theme}
-                onPress={() => setFilterProject("sinProyecto")}
-              />
-
-              {projects.map((project) => (
-                <ProjectFilterChip
-                  key={project.id}
-                  label={project.name}
-                  icon="folder-outline"
-                  selected={filterProject === project.id}
-                  color={project.color || theme.colors.primary}
+            <TouchableRipple
+              onPress={() => setFilterProjectSelectorOpen((prev) => !prev)}
+              rippleColor={theme.colors.primarySoft}
+              style={[
+                styles.projectSelectorCard,
+                {
+                  backgroundColor: getProjectSelectorBackground(
+                    theme,
+                    selectedFilterProject.color,
+                    filterProject !== "todos"
+                  ),
+                  borderColor: getProjectSelectorBorder(
+                    theme,
+                    selectedFilterProject.color,
+                    filterProject !== "todos"
+                  ),
+                },
+              ]}
+            >
+              <View style={styles.projectSelectorContent}>
+                <ProjectSelectorIcon
                   theme={theme}
-                  onPress={() => setFilterProject(project.id)}
+                  color={selectedFilterProject.color}
+                  logoUrl={selectedFilterProject.logoUrl}
+                  icon={selectedFilterProject.icon}
                 />
-              ))}
-            </View>
+
+                <View style={styles.projectSelectorText}>
+                  <Text
+                    style={[
+                      styles.projectSelectorTitle,
+                      {
+                        color:
+                          filterProject === "todos"
+                            ? theme.colors.text
+                            : selectedFilterProject.color,
+                      },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {selectedFilterProject.name}
+                  </Text>
+
+                  <Text
+                    style={[
+                      styles.projectSelectorSubtitle,
+                      { color: theme.colors.secondary },
+                    ]}
+                  >
+                    Tocá para elegir un proyecto
+                  </Text>
+                </View>
+
+                <MaterialCommunityIcons
+                  name={filterProjectSelectorOpen ? "chevron-up" : "chevron-down"}
+                  size={responsive(23, 29)}
+                  color={theme.colors.secondary}
+                />
+              </View>
+            </TouchableRipple>
+
+            {filterProjectSelectorOpen && (
+              <Card
+                mode="contained"
+                style={[
+                  styles.projectOptionsCard,
+                  {
+                    backgroundColor: theme.colors.surface,
+                    borderColor: theme.colors.borderSoft,
+                  },
+                ]}
+              >
+                <View style={styles.projectOptionsContent}>
+                  <ProjectDropdownOption
+                    label="Todos los proyectos"
+                    selected={filterProject === "todos"}
+                    color={theme.colors.primary}
+                    theme={theme}
+                    icon="folder-multiple-outline"
+                    onPress={() => {
+                      setFilterProject("todos");
+                      setFilterProjectSelectorOpen(false);
+                    }}
+                  />
+
+                  <ProjectDropdownOption
+                    label="Sin proyecto"
+                    selected={filterProject === "sinProyecto"}
+                    color={theme.colors.paused || theme.colors.secondary}
+                    theme={theme}
+                    icon="checkbox-blank-circle"
+                    onPress={() => {
+                      setFilterProject("sinProyecto");
+                      setFilterProjectSelectorOpen(false);
+                    }}
+                  />
+
+                  {projects.map((project) => (
+                    <ProjectDropdownOption
+                      key={project.id}
+                      label={project.name}
+                      selected={filterProject === project.id}
+                      color={project.color || theme.colors.primary}
+                      theme={theme}
+                      logoUrl={project.logoUrl}
+                      icon="folder-outline"
+                      onPress={() => {
+                        setFilterProject(project.id);
+                        setFilterProjectSelectorOpen(false);
+                      }}
+                    />
+                  ))}
+                </View>
+              </Card>
+            )}
 
             {activeFiltersCount > 0 && (
               <Button
@@ -571,9 +760,7 @@ export default function NotesScreen({ theme }) {
       </Card>
 
       {loading ? (
-        <View style={styles.loadingBox}>
-          <ActivityIndicator color={theme.colors.primary} />
-        </View>
+        <NotesSkeleton theme={theme} />
       ) : filteredNotes.length === 0 ? (
         <Card
           mode="contained"
@@ -594,7 +781,7 @@ export default function NotesScreen({ theme }) {
             >
               <MaterialCommunityIcons
                 name="note-plus-outline"
-                size={27}
+                size={responsive(27, 35)}
                 color={theme.colors.primary}
               />
             </View>
@@ -611,6 +798,8 @@ export default function NotesScreen({ theme }) {
               mode="contained"
               icon="plus"
               style={styles.emptyButton}
+              contentStyle={styles.emptyButtonContent}
+              labelStyle={styles.emptyButtonLabel}
               onPress={openCreateModal}
             >
               Nueva nota
@@ -622,104 +811,327 @@ export default function NotesScreen({ theme }) {
       )}
 
       <Modal visible={modalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View
+        <KeyboardAvoidingView
+          style={styles.modalKeyboardView}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          keyboardVerticalOffset={Platform.OS === "ios" ? 12 : 0}
+        >
+          <View style={styles.modalOverlay}>
+            <View
+              style={[
+                styles.modal,
+                {
+                  backgroundColor: theme.colors.surface,
+                  borderColor: theme.colors.borderSoft,
+                },
+              ]}
+            >
+              <View style={styles.modalHandle} />
+
+              <View style={styles.modalHeader}>
+                <View style={styles.modalTitleBox}>
+                  <Text style={[styles.modalTitle, { color: theme.colors.text }]}>
+                    {editingNote ? "Editar nota" : "Nueva nota"}
+                  </Text>
+
+                  <Text
+                    style={[
+                      styles.modalSubtitle,
+                      { color: theme.colors.secondary },
+                    ]}
+                  >
+                    Guardá una idea, comando, bug o recordatorio rápido.
+                  </Text>
+                </View>
+
+                <IconButton
+                  icon="close"
+                  size={responsive(21, 27)}
+                  iconColor={theme.colors.secondary}
+                  style={styles.closeButton}
+                  onPress={() => {
+                    resetForm();
+                    setModalVisible(false);
+                  }}
+                />
+              </View>
+
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="interactive"
+                contentContainerStyle={styles.modalScrollContent}
+              >
+                <TextInput
+                  label="Título"
+                  value={title}
+                  onChangeText={setTitle}
+                  mode="outlined"
+                  style={styles.input}
+                  outlineStyle={styles.inputOutline}
+                  contentStyle={styles.inputContent}
+                />
+
+                <FormSection title="Proyecto relacionado" theme={theme} />
+
+                <TouchableRipple
+                  onPress={() => setProjectSelectorOpen((prev) => !prev)}
+                  rippleColor={theme.colors.primarySoft}
+                  style={[
+                    styles.projectSelectorCard,
+                    {
+                      backgroundColor: getProjectSelectorBackground(
+                        theme,
+                        selectedProject?.color ||
+                          theme.colors.paused ||
+                          theme.colors.secondary,
+                        !!selectedProject
+                      ),
+                      borderColor: getProjectSelectorBorder(
+                        theme,
+                        selectedProject?.color ||
+                          theme.colors.paused ||
+                          theme.colors.secondary,
+                        !!selectedProject
+                      ),
+                    },
+                  ]}
+                >
+                  <View style={styles.projectSelectorContent}>
+                    <ProjectSelectorIcon
+                      theme={theme}
+                      color={
+                        selectedProject?.color ||
+                        theme.colors.paused ||
+                        theme.colors.secondary
+                      }
+                      logoUrl={selectedProject?.logoUrl}
+                      letter={selectedProject?.name?.charAt(0)?.toUpperCase()}
+                      icon={
+                        selectedProject ? "folder-outline" : "checkbox-blank-circle"
+                      }
+                    />
+
+                    <View style={styles.projectSelectorText}>
+                      <Text
+                        style={[
+                          styles.projectSelectorTitle,
+                          {
+                            color: selectedProject?.color || theme.colors.text,
+                          },
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {selectedProject?.name || "Sin proyecto"}
+                      </Text>
+
+                      <Text
+                        style={[
+                          styles.projectSelectorSubtitle,
+                          { color: theme.colors.secondary },
+                        ]}
+                      >
+                        Tocá para elegir un proyecto
+                      </Text>
+                    </View>
+
+                    <MaterialCommunityIcons
+                      name={projectSelectorOpen ? "chevron-up" : "chevron-down"}
+                      size={responsive(23, 29)}
+                      color={theme.colors.secondary}
+                    />
+                  </View>
+                </TouchableRipple>
+
+                {projectSelectorOpen && (
+                  <Card
+                    mode="contained"
+                    style={[
+                      styles.projectOptionsCard,
+                      {
+                        backgroundColor: theme.colors.surface,
+                        borderColor: theme.colors.borderSoft,
+                      },
+                    ]}
+                  >
+                    <View style={styles.projectOptionsContent}>
+                      <ProjectDropdownOption
+                        label="Sin proyecto"
+                        selected={!projectId}
+                        color={theme.colors.paused || theme.colors.secondary}
+                        theme={theme}
+                        icon="checkbox-blank-circle"
+                        onPress={() => {
+                          setProjectId(null);
+                          setProjectSelectorOpen(false);
+                        }}
+                      />
+
+                      {projects.map((project) => (
+                        <ProjectDropdownOption
+                          key={project.id}
+                          label={project.name}
+                          selected={projectId === project.id}
+                          color={project.color || theme.colors.primary}
+                          theme={theme}
+                          logoUrl={project.logoUrl}
+                          icon="folder-outline"
+                          onPress={() => {
+                            setProjectId(project.id);
+                            setProjectSelectorOpen(false);
+                          }}
+                        />
+                      ))}
+                    </View>
+                  </Card>
+                )}
+
+                <TextInput
+                  label="Contenido"
+                  value={content}
+                  onChangeText={setContent}
+                  mode="outlined"
+                  multiline
+                  numberOfLines={8}
+                  style={styles.textArea}
+                  outlineStyle={styles.inputOutline}
+                  contentStyle={styles.inputContent}
+                  textAlignVertical="top"
+                />
+
+                <Button
+                  mode="contained"
+                  icon={editingNote ? "content-save-outline" : "plus"}
+                  style={styles.saveButton}
+                  contentStyle={styles.saveButtonContent}
+                  labelStyle={styles.saveButtonLabel}
+                  onPress={handleSaveNote}
+                >
+                  {editingNote ? "Guardar cambios" : "Guardar nota"}
+                </Button>
+              </ScrollView>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      <Modal visible={detailModalVisible} animationType="fade" transparent>
+        <View style={styles.detailOverlay}>
+          <Card
+            mode="contained"
             style={[
-              styles.modal,
+              styles.detailModal,
               {
                 backgroundColor: theme.colors.surface,
                 borderColor: theme.colors.borderSoft,
               },
             ]}
           >
-            <View style={styles.modalHandle} />
+            <View style={styles.detailContent}>
+              <View style={styles.detailHeader}>
+                <ProjectSelectorIcon
+                  theme={theme}
+                  color={detailProjectColor}
+                  logoUrl={selectedNote?.projectLogoUrl}
+                  letter={selectedNote?.projectName?.charAt(0)?.toUpperCase()}
+                  icon="note-text-outline"
+                  size="detail"
+                />
 
-            <View style={styles.modalHeader}>
-              <View style={styles.modalTitleBox}>
-                <Text style={[styles.modalTitle, { color: theme.colors.text }]}>
-                  {editingNote ? "Editar nota" : "Nueva nota"}
+                <View style={styles.detailHeaderText}>
+                  <Text
+                    style={[
+                      styles.detailProjectName,
+                      { color: theme.colors.secondary },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {selectedNote?.projectName || "Sin proyecto"}
+                  </Text>
+
+                  <Text style={[styles.detailTitle, { color: theme.colors.text }]}>
+                    {selectedNote?.title || "Sin título"}
+                  </Text>
+                </View>
+
+                <IconButton
+                  icon="close"
+                  size={responsive(21, 27)}
+                  iconColor={theme.colors.secondary}
+                  style={styles.closeButton}
+                  onPress={closeDetailModal}
+                />
+              </View>
+
+              <Divider
+                style={[
+                  styles.detailDivider,
+                  { backgroundColor: theme.colors.borderSoft },
+                ]}
+              />
+
+              <ScrollView
+                style={styles.detailScrollArea}
+                showsVerticalScrollIndicator={true}
+                nestedScrollEnabled
+                contentContainerStyle={styles.detailScrollContent}
+              >
+                <Text style={[styles.detailSectionTitle, { color: theme.colors.text }]}>
+                  Contenido
                 </Text>
 
                 <Text
                   style={[
-                    styles.modalSubtitle,
+                    styles.detailDescription,
                     { color: theme.colors.secondary },
                   ]}
                 >
-                  Guardá una idea, comando, bug o recordatorio rápido.
+                  {selectedNote?.content?.trim()
+                    ? selectedNote.content
+                    : "Esta nota no tiene contenido."}
                 </Text>
-              </View>
+              </ScrollView>
 
-              <IconButton
-                icon="close"
-                size={21}
-                iconColor={theme.colors.secondary}
-                style={styles.closeButton}
-                onPress={() => {
-                  resetForm();
-                  setModalVisible(false);
-                }}
-              />
+              <View style={styles.detailActions}>
+                <TouchableRipple
+                  borderless
+                  rippleColor={theme.colors.primarySoft}
+                  style={[
+                    styles.detailEditFancyButton,
+                    {
+                      backgroundColor: theme.colors.primarySoft,
+                      borderColor: hexToRgba(
+                        theme.colors.primary,
+                        theme.dark ? 0.34 : 0.18
+                      ),
+                    },
+                  ]}
+                  onPress={openEditFromDetail}
+                >
+                  <View style={styles.detailEditFancyContent}>
+                    <Text
+                      style={[
+                        styles.detailEditFancyText,
+                        { color: theme.colors.primary },
+                      ]}
+                    >
+                      Editar nota
+                    </Text>
+                  </View>
+                </TouchableRipple>
+
+                <Button
+                  mode="contained"
+                  style={styles.detailCloseButton}
+                  contentStyle={styles.detailButtonContent}
+                  labelStyle={styles.detailButtonLabel}
+                  onPress={closeDetailModal}
+                >
+                  Cerrar
+                </Button>
+              </View>
             </View>
-
-            <ScrollView showsVerticalScrollIndicator={false}>
-              <TextInput
-                label="Título"
-                value={title}
-                onChangeText={setTitle}
-                mode="outlined"
-                style={styles.input}
-                outlineStyle={styles.inputOutline}
-              />
-
-              <FormSection title="Proyecto relacionado" theme={theme} />
-
-              <View style={styles.optionWrap}>
-                <ProjectOptionChip
-                  label="Sin proyecto"
-                  icon="account-outline"
-                  selected={!projectId}
-                  color={theme.colors.secondary}
-                  theme={theme}
-                  onPress={() => setProjectId(null)}
-                />
-
-                {projects.map((project) => (
-                  <ProjectOptionChip
-                    key={project.id}
-                    label={project.name}
-                    icon="folder-outline"
-                    selected={projectId === project.id}
-                    color={project.color || theme.colors.primary}
-                    theme={theme}
-                    onPress={() => setProjectId(project.id)}
-                  />
-                ))}
-              </View>
-
-              <TextInput
-                label="Contenido"
-                value={content}
-                onChangeText={setContent}
-                mode="outlined"
-                multiline
-                numberOfLines={8}
-                style={styles.textArea}
-                outlineStyle={styles.inputOutline}
-              />
-
-              <Button
-                mode="contained"
-                icon={editingNote ? "content-save-outline" : "plus"}
-                style={styles.saveButton}
-                contentStyle={styles.saveButtonContent}
-                labelStyle={styles.saveButtonLabel}
-                onPress={handleSaveNote}
-              >
-                {editingNote ? "Guardar cambios" : "Guardar nota"}
-              </Button>
-            </ScrollView>
-          </View>
+          </Card>
         </View>
       </Modal>
 
@@ -738,71 +1150,146 @@ export default function NotesScreen({ theme }) {
   );
 }
 
-function ProjectFilterChip({ label, icon, selected, color, theme, onPress }) {
-  const bg = selected
-    ? theme.dark
-      ? hexToRgba(color, 0.18)
-      : hexToRgba(color, 0.09)
-    : theme.colors.surfaceSoft;
+function ProjectBadge({ item, theme, size = 52 }) {
+  const color = item.projectColor || theme.colors.primary;
+  const logoUrl = item.projectLogoUrl;
 
   return (
-    <Chip
-      compact
-      icon={icon}
-      selected={selected}
-      onPress={onPress}
+    <View
       style={[
-        styles.filterChip,
+        styles.projectBadge,
         {
-          backgroundColor: bg,
-          borderColor: selected
-            ? hexToRgba(color, theme.dark ? 0.34 : 0.18)
-            : theme.colors.borderSoft,
-        },
-      ]}
-      textStyle={[
-        styles.filterChipText,
-        {
-          color: selected ? color : theme.colors.secondary,
+          width: size,
+          height: size,
+          borderRadius: size / 3,
+          backgroundColor: getProjectIconBackground(theme, color),
+          borderColor: getProjectIconBorder(theme, color),
         },
       ]}
     >
-      {label}
-    </Chip>
+      {logoUrl ? (
+        <Image source={{ uri: logoUrl }} style={styles.logo} />
+      ) : item.projectName ? (
+        <Text style={[styles.projectLetter, { color }]}>
+          {item.projectName.charAt(0).toUpperCase()}
+        </Text>
+      ) : (
+        <MaterialCommunityIcons
+          name="note-text-outline"
+          size={responsive(24, 31)}
+          color={theme.colors.primary}
+        />
+      )}
+    </View>
   );
 }
 
-function ProjectOptionChip({ label, icon, selected, color, theme, onPress }) {
-  const bg = selected
-    ? theme.dark
-      ? hexToRgba(color, 0.18)
-      : hexToRgba(color, 0.09)
-    : theme.colors.surfaceSoft;
+function ProjectSelectorIcon({
+  theme,
+  color,
+  logoUrl,
+  letter,
+  icon = "folder-outline",
+  size = "normal",
+}) {
+  const boxStyle =
+    size === "detail" ? styles.detailProjectIcon : styles.projectSelectorIconBox;
+
+  const iconSize = size === "detail" ? responsive(22, 29) : responsive(20, 26);
 
   return (
-    <Chip
-      compact
-      icon={icon}
-      selected={selected}
-      onPress={onPress}
+    <View
       style={[
-        styles.optionChip,
+        boxStyle,
         {
-          backgroundColor: bg,
-          borderColor: selected
-            ? hexToRgba(color, theme.dark ? 0.34 : 0.18)
-            : theme.colors.borderSoft,
-        },
-      ]}
-      textStyle={[
-        styles.optionChipText,
-        {
-          color: selected ? color : theme.colors.secondary,
+          backgroundColor: getProjectIconBackground(theme, color),
+          borderColor: getProjectIconBorder(theme, color),
         },
       ]}
     >
-      {label}
-    </Chip>
+      {logoUrl ? (
+        <Image source={{ uri: logoUrl }} style={styles.logo} />
+      ) : letter ? (
+        <Text
+          style={[
+            size === "detail"
+              ? styles.detailProjectLetter
+              : styles.projectSelectorLetter,
+            { color },
+          ]}
+        >
+          {letter}
+        </Text>
+      ) : (
+        <MaterialCommunityIcons name={icon} size={iconSize} color={color} />
+      )}
+    </View>
+  );
+}
+
+function ProjectDropdownOption({
+  label,
+  selected,
+  color,
+  theme,
+  logoUrl,
+  icon = "folder-outline",
+  onPress,
+}) {
+  return (
+    <TouchableRipple
+      onPress={onPress}
+      rippleColor={hexToRgba(color, 0.12)}
+      style={[
+        styles.projectDropdownOption,
+        {
+          backgroundColor: getProjectSelectorBackground(theme, color, selected),
+          borderColor: getProjectSelectorBorder(theme, color, selected),
+        },
+      ]}
+    >
+      <View style={styles.projectDropdownContent}>
+        <View
+          style={[
+            styles.projectDropdownIcon,
+            {
+              backgroundColor: getProjectIconBackground(theme, color),
+              borderColor: getProjectIconBorder(theme, color),
+            },
+          ]}
+        >
+          {logoUrl ? (
+            <Image source={{ uri: logoUrl }} style={styles.logo} />
+          ) : (
+            <MaterialCommunityIcons
+              name={icon}
+              size={responsive(19, 25)}
+              color={color}
+            />
+          )}
+        </View>
+
+        <Text
+          style={[
+            styles.projectDropdownText,
+            {
+              color: selected ? color : theme.colors.text,
+            },
+          ]}
+          numberOfLines={1}
+        >
+          {label}
+        </Text>
+
+        {selected && (
+          <MaterialCommunityIcons
+            name="check-circle-outline"
+            size={responsive(19, 25)}
+            color={color}
+          />
+        )}
+      </View>
+    </TouchableRipple>
   );
 }
 
@@ -812,6 +1299,83 @@ function FormSection({ title, theme }) {
       {title}
     </Text>
   );
+}
+
+function NotesSkeleton({ theme }) {
+  return (
+    <View style={styles.list}>
+      {[1, 2, 3, 4].map((item) => (
+        <NoteSkeletonCard key={item} theme={theme} />
+      ))}
+    </View>
+  );
+}
+
+function NoteSkeletonCard({ theme }) {
+  const skeleton = getSkeletonColors(theme);
+
+  return (
+    <Card
+      mode="contained"
+      style={[
+        styles.noteCard,
+        {
+          backgroundColor: theme.colors.surface,
+          borderColor: theme.colors.borderSoft,
+        },
+      ]}
+    >
+      <View style={styles.noteCardContent}>
+        <View style={styles.noteHeader}>
+          <SkeletonBlock style={styles.skeletonProjectBadge} color={skeleton.strong} />
+
+          <View style={styles.noteInfo}>
+            <SkeletonBlock style={styles.skeletonTitle} color={skeleton.strong} />
+            <SkeletonBlock style={styles.skeletonSubtitle} color={skeleton.soft} />
+          </View>
+        </View>
+
+        <View
+          style={[
+            styles.contentBox,
+            {
+              backgroundColor: theme.colors.surfaceSoft,
+              borderColor: theme.colors.borderSoft,
+            },
+          ]}
+        >
+          <SkeletonBlock style={styles.skeletonContentLine} color={skeleton.soft} />
+          <SkeletonBlock style={styles.skeletonContentLineTwo} color={skeleton.soft} />
+          <SkeletonBlock
+            style={styles.skeletonContentLineSmall}
+            color={skeleton.soft}
+          />
+        </View>
+
+        <Divider
+          style={[
+            styles.cardDivider,
+            {
+              backgroundColor: theme.colors.borderSoft,
+            },
+          ]}
+        />
+
+        <View style={styles.actionsRow}>
+          <SkeletonBlock style={styles.skeletonCopyButton} color={skeleton.strong} />
+
+          <View style={styles.iconActions}>
+            <SkeletonBlock style={styles.skeletonAction} color={skeleton.strong} />
+            <SkeletonBlock style={styles.skeletonAction} color={skeleton.strong} />
+          </View>
+        </View>
+      </View>
+    </Card>
+  );
+}
+
+function SkeletonBlock({ style, color }) {
+  return <View style={[style, { backgroundColor: color }]} />;
 }
 
 function DeleteModal({
@@ -847,7 +1411,7 @@ function DeleteModal({
             >
               <MaterialCommunityIcons
                 name={icon}
-                size={29}
+                size={responsive(29, 37)}
                 color={theme.colors.danger}
               />
             </View>
@@ -931,13 +1495,16 @@ const styles = StyleSheet.create({
   },
 
   content: {
-    paddingHorizontal: 20,
-    paddingTop: 6,
-    paddingBottom: 135,
+    width: "100%",
+    maxWidth: responsive(undefined, 860),
+    alignSelf: "center",
+    paddingHorizontal: responsive(20, 34),
+    paddingTop: responsive(6, 18),
+    paddingBottom: responsive(155, 185),
   },
 
   header: {
-    marginBottom: 18,
+    marginBottom: responsive(18, 26),
   },
 
   titleRow: {
@@ -946,10 +1513,10 @@ const styles = StyleSheet.create({
   },
 
   sectionMarker: {
-    width: 5,
-    height: 28,
+    width: responsive(5, 6),
+    height: responsive(28, 34),
     borderRadius: 999,
-    marginRight: 10,
+    marginRight: responsive(10, 13),
   },
 
   title: {
@@ -958,149 +1525,125 @@ const styles = StyleSheet.create({
   },
 
   subtitle: {
-    marginTop: 7,
-    fontSize: 13.5,
-    lineHeight: 19,
-    maxWidth: 340,
+    marginTop: responsive(7, 10),
+    fontSize: responsive(13.5, 16),
+    lineHeight: responsive(19, 23),
+    maxWidth: responsive(340, 560),
   },
 
   createButton: {
     width: "100%",
-    borderRadius: 18,
+    borderRadius: responsive(18, 22),
     elevation: 0,
-    marginBottom: 14,
+    marginBottom: responsive(14, 20),
   },
 
   createButtonContent: {
-    height: 50,
+    height: responsive(50, 60),
   },
 
   createButtonLabel: {
-    fontSize: 14,
+    fontSize: responsive(14, 16),
     fontWeight: "900",
   },
 
   filtersCard: {
-    borderRadius: 24,
+    borderRadius: responsive(24, 30),
     borderWidth: 1,
     elevation: 0,
     overflow: "hidden",
-    marginBottom: 14,
+    marginBottom: responsive(14, 20),
   },
 
   filtersHeader: {
-    minHeight: 70,
+    minHeight: responsive(70, 88),
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 14,
-    paddingVertical: 11,
+    paddingHorizontal: responsive(14, 22),
+    paddingVertical: responsive(11, 15),
   },
 
   filtersIconBox: {
-    width: 40,
-    height: 40,
-    borderRadius: 14,
+    width: responsive(40, 54),
+    height: responsive(40, 54),
+    borderRadius: responsive(14, 19),
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 12,
+    marginRight: responsive(12, 16),
   },
 
   filtersTextBox: {
     flex: 1,
-    paddingRight: 8,
+    paddingRight: responsive(8, 12),
   },
 
   filtersTitle: {
-    fontSize: 15,
+    fontSize: responsive(15, 18),
     fontWeight: "900",
     letterSpacing: -0.2,
   },
 
   filtersSubtitle: {
-    marginTop: 2,
-    fontSize: 12.5,
-    lineHeight: 17,
+    marginTop: responsive(2, 4),
+    fontSize: responsive(12.5, 15),
+    lineHeight: responsive(17, 21),
   },
 
   activeBadge: {
-    minWidth: 26,
-    height: 26,
+    minWidth: responsive(26, 34),
+    height: responsive(26, 34),
     borderRadius: 999,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 8,
-    paddingHorizontal: 8,
+    marginRight: responsive(8, 12),
+    paddingHorizontal: responsive(8, 11),
   },
 
   activeBadgeText: {
-    fontSize: 12,
+    fontSize: responsive(12, 14),
     fontWeight: "900",
   },
 
   filtersBody: {
-    paddingHorizontal: 14,
-    paddingBottom: 14,
+    paddingHorizontal: responsive(14, 22),
+    paddingBottom: responsive(14, 22),
   },
 
   search: {
-    borderRadius: 18,
+    borderRadius: responsive(18, 23),
     borderWidth: 1,
     elevation: 0,
-    marginBottom: 12,
+    marginBottom: responsive(12, 18),
   },
 
   searchInput: {
-    fontSize: 14,
+    fontSize: responsive(14, 16),
   },
 
   clearFiltersButton: {
-    borderRadius: 16,
+    borderRadius: responsive(16, 20),
     elevation: 0,
-    marginTop: 2,
+    marginTop: responsive(2, 6),
   },
 
   clearFiltersButtonContent: {
-    height: 42,
+    height: responsive(42, 52),
   },
 
   clearFiltersButtonLabel: {
-    fontSize: 13,
+    fontSize: responsive(13, 15),
     fontWeight: "900",
   },
 
   sectionTitle: {
-    fontSize: 14,
+    fontSize: responsive(14, 17),
     fontWeight: "900",
-    marginTop: 4,
-    marginBottom: 10,
-  },
-
-  optionWrap: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    marginBottom: 14,
-  },
-
-  filterChip: {
-    borderWidth: 1,
-    borderRadius: 999,
-    marginBottom: 2,
-  },
-
-  filterChipText: {
-    fontSize: 12,
-    fontWeight: "900",
-  },
-
-  loadingBox: {
-    minHeight: 180,
-    alignItems: "center",
-    justifyContent: "center",
+    marginTop: responsive(4, 8),
+    marginBottom: responsive(10, 14),
   },
 
   emptyCard: {
-    borderRadius: 24,
+    borderRadius: responsive(24, 30),
     borderWidth: 1,
     elevation: 0,
     overflow: "hidden",
@@ -1108,50 +1651,60 @@ const styles = StyleSheet.create({
 
   emptyContent: {
     alignItems: "center",
-    padding: 22,
+    padding: responsive(22, 34),
   },
 
   emptyIconBox: {
-    width: 54,
-    height: 54,
-    borderRadius: 19,
+    width: responsive(54, 70),
+    height: responsive(54, 70),
+    borderRadius: responsive(19, 24),
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 14,
+    marginBottom: responsive(14, 20),
   },
 
   emptyTitle: {
-    fontSize: 18,
+    fontSize: responsive(18, 23),
     fontWeight: "900",
     letterSpacing: -0.25,
     textAlign: "center",
   },
 
   emptyText: {
-    marginTop: 6,
-    marginBottom: 16,
-    fontSize: 13,
-    lineHeight: 19,
+    marginTop: responsive(6, 9),
+    marginBottom: responsive(16, 22),
+    fontSize: responsive(13, 16),
+    lineHeight: responsive(19, 23),
     textAlign: "center",
+    maxWidth: responsive(undefined, 460),
   },
 
   emptyButton: {
-    borderRadius: 16,
+    borderRadius: responsive(16, 20),
+  },
+
+  emptyButtonContent: {
+    height: responsive(44, 54),
+  },
+
+  emptyButtonLabel: {
+    fontSize: responsive(14, 16),
+    fontWeight: "900",
   },
 
   list: {
-    gap: 12,
+    gap: responsive(12, 18),
   },
 
   noteCard: {
-    borderRadius: 24,
+    borderRadius: responsive(24, 30),
     borderWidth: 1,
     elevation: 0,
     overflow: "hidden",
   },
 
   noteCardContent: {
-    padding: 14,
+    padding: responsive(14, 22),
   },
 
   noteHeader: {
@@ -1163,7 +1716,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     overflow: "hidden",
-    marginRight: 12,
+    marginRight: responsive(12, 18),
+    borderWidth: 1,
   },
 
   logo: {
@@ -1172,7 +1726,7 @@ const styles = StyleSheet.create({
   },
 
   projectLetter: {
-    fontSize: 22,
+    fontSize: responsive(22, 30),
     fontWeight: "900",
   },
 
@@ -1181,39 +1735,39 @@ const styles = StyleSheet.create({
   },
 
   noteTitle: {
-    fontSize: 17,
+    fontSize: responsive(17, 22),
     fontWeight: "900",
     letterSpacing: -0.25,
-    lineHeight: 22,
+    lineHeight: responsive(22, 28),
   },
 
   noteMeta: {
-    marginTop: 3,
-    fontSize: 12.5,
+    marginTop: responsive(3, 5),
+    fontSize: responsive(12.5, 15),
     fontWeight: "700",
   },
 
   contentBox: {
-    marginTop: 13,
-    borderRadius: 18,
+    marginTop: responsive(13, 18),
+    borderRadius: responsive(18, 23),
     borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 11,
+    paddingHorizontal: responsive(12, 16),
+    paddingVertical: responsive(11, 15),
   },
 
   noteContent: {
-    fontSize: 13,
-    lineHeight: 20,
+    fontSize: responsive(13, 16),
+    lineHeight: responsive(20, 24),
   },
 
   cardDivider: {
     height: 1,
-    marginTop: 14,
-    marginBottom: 10,
+    marginTop: responsive(14, 20),
+    marginBottom: responsive(10, 14),
   },
 
   actionsRow: {
-    minHeight: 42,
+    minHeight: responsive(42, 56),
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -1225,11 +1779,12 @@ const styles = StyleSheet.create({
   },
 
   copyButtonContent: {
-    height: 38,
+    height: responsive(38, 48),
+    paddingHorizontal: responsive(2, 8),
   },
 
   copyButtonLabel: {
-    fontSize: 12.5,
+    fontSize: responsive(12.5, 15),
     fontWeight: "900",
   },
 
@@ -1240,7 +1795,11 @@ const styles = StyleSheet.create({
 
   actionIcon: {
     margin: 0,
-    marginLeft: 4,
+    marginLeft: responsive(4, 7),
+  },
+
+  modalKeyboardView: {
+    flex: 1,
   },
 
   modalOverlay: {
@@ -1250,47 +1809,54 @@ const styles = StyleSheet.create({
   },
 
   modal: {
-    maxHeight: "92%",
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
+    width: "100%",
+    maxWidth: responsive(undefined, 760),
+    alignSelf: "center",
+    maxHeight: responsive("92%", "88%"),
+    borderTopLeftRadius: responsive(30, 34),
+    borderTopRightRadius: responsive(30, 34),
     borderWidth: 1,
     borderBottomWidth: 0,
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-    paddingTop: 10,
+    paddingHorizontal: responsive(20, 32),
+    paddingBottom: responsive(32, 42),
+    paddingTop: responsive(10, 14),
+  },
+
+  modalScrollContent: {
+    paddingBottom: responsive(90, 110),
   },
 
   modalHandle: {
     alignSelf: "center",
-    width: 44,
-    height: 5,
+    width: responsive(44, 56),
+    height: responsive(5, 6),
     borderRadius: 999,
     backgroundColor: "rgba(148,163,184,0.45)",
-    marginBottom: 14,
+    marginBottom: responsive(14, 20),
   },
 
   modalHeader: {
     flexDirection: "row",
     alignItems: "flex-start",
     justifyContent: "space-between",
-    marginBottom: 16,
+    marginBottom: responsive(16, 22),
   },
 
   modalTitleBox: {
     flex: 1,
-    paddingRight: 10,
+    paddingRight: responsive(10, 16),
   },
 
   modalTitle: {
-    fontSize: 22,
+    fontSize: responsive(22, 28),
     fontWeight: "900",
     letterSpacing: -0.4,
   },
 
   modalSubtitle: {
-    marginTop: 3,
-    fontSize: 13,
-    lineHeight: 18,
+    marginTop: responsive(3, 5),
+    fontSize: responsive(13, 16),
+    lineHeight: responsive(18, 23),
   },
 
   closeButton: {
@@ -1298,42 +1864,267 @@ const styles = StyleSheet.create({
   },
 
   input: {
-    marginBottom: 12,
+    marginBottom: responsive(12, 16),
+  },
+
+  inputContent: {
+    fontSize: responsive(14, 16),
   },
 
   inputOutline: {
-    borderRadius: 16,
+    borderRadius: responsive(16, 20),
   },
 
   textArea: {
-    marginBottom: 12,
-    minHeight: 180,
-  },
-
-  optionChip: {
-    borderWidth: 1,
-    borderRadius: 999,
-    marginBottom: 2,
-  },
-
-  optionChipText: {
-    fontSize: 12,
-    fontWeight: "900",
+    marginBottom: responsive(12, 16),
+    minHeight: responsive(180, 240),
   },
 
   saveButton: {
-    borderRadius: 18,
-    marginTop: 12,
-    marginBottom: 10,
+    borderRadius: responsive(18, 22),
+    marginTop: responsive(12, 18),
+    marginBottom: responsive(24, 30),
     elevation: 0,
   },
 
   saveButtonContent: {
-    height: 50,
+    height: responsive(52, 62),
   },
 
   saveButtonLabel: {
-    fontSize: 14,
+    fontSize: responsive(14, 16),
+    fontWeight: "900",
+  },
+
+  projectSelectorCard: {
+    borderRadius: responsive(20, 26),
+    borderWidth: 1,
+    overflow: "hidden",
+    marginBottom: responsive(12, 16),
+  },
+
+  projectSelectorContent: {
+    minHeight: responsive(64, 80),
+    paddingHorizontal: responsive(13, 18),
+    paddingVertical: responsive(10, 14),
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  projectSelectorIconBox: {
+    width: responsive(42, 54),
+    height: responsive(42, 54),
+    borderRadius: responsive(15, 19),
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: responsive(12, 16),
+    overflow: "hidden",
+  },
+
+  projectSelectorLetter: {
+    fontSize: responsive(18, 24),
+    fontWeight: "900",
+  },
+
+  projectSelectorText: {
+    flex: 1,
+  },
+
+  projectSelectorTitle: {
+    fontSize: responsive(14.5, 17),
+    fontWeight: "900",
+  },
+
+  projectSelectorSubtitle: {
+    marginTop: responsive(2, 4),
+    fontSize: responsive(12.5, 15),
+    fontWeight: "700",
+  },
+
+  projectOptionsCard: {
+    borderRadius: responsive(22, 28),
+    borderWidth: 1,
+    elevation: 0,
+    overflow: "hidden",
+    marginBottom: responsive(14, 20),
+  },
+
+  projectOptionsContent: {
+    padding: responsive(12, 18),
+    gap: responsive(8, 11),
+  },
+
+  projectDropdownOption: {
+    borderRadius: responsive(18, 23),
+    borderWidth: 1,
+    overflow: "hidden",
+  },
+
+  projectDropdownContent: {
+    minHeight: responsive(54, 68),
+    paddingHorizontal: responsive(11, 16),
+    paddingVertical: responsive(8, 12),
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  projectDropdownIcon: {
+    width: responsive(36, 48),
+    height: responsive(36, 48),
+    borderRadius: responsive(13, 17),
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: responsive(10, 14),
+    overflow: "hidden",
+  },
+
+  projectDropdownText: {
+    flex: 1,
+    fontSize: responsive(13.5, 16),
+    fontWeight: "900",
+  },
+
+  detailOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.42)",
+    justifyContent: "center",
+    paddingHorizontal: responsive(20, 34),
+  },
+
+  detailModal: {
+    width: "100%",
+    maxWidth: responsive(undefined, 680),
+    alignSelf: "center",
+    maxHeight: responsive("88%", "82%"),
+    borderRadius: responsive(30, 36),
+    borderWidth: 1,
+    elevation: 0,
+    overflow: "hidden",
+  },
+
+  detailContent: {
+    padding: responsive(18, 28),
+    maxHeight: "100%",
+  },
+
+  detailHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+  },
+
+  detailProjectIcon: {
+    width: responsive(50, 66),
+    height: responsive(50, 66),
+    borderRadius: responsive(18, 23),
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+    marginRight: responsive(12, 16),
+  },
+
+  detailProjectLetter: {
+    fontSize: responsive(21, 29),
+    fontWeight: "900",
+  },
+
+  detailHeaderText: {
+    flex: 1,
+    paddingTop: responsive(2, 4),
+  },
+
+  detailProjectName: {
+    fontSize: responsive(12.5, 15),
+    fontWeight: "800",
+    marginBottom: responsive(4, 6),
+  },
+
+  detailTitle: {
+    fontSize: responsive(20, 26),
+    fontWeight: "900",
+    letterSpacing: -0.35,
+    lineHeight: responsive(26, 33),
+  },
+
+  detailDivider: {
+    height: 1,
+    marginTop: responsive(16, 22),
+    marginBottom: responsive(14, 20),
+  },
+
+  detailScrollArea: {
+    flexShrink: 1,
+    maxHeight: responsive(430, 560),
+  },
+
+  detailScrollContent: {
+    paddingBottom: responsive(95, 115),
+  },
+
+  detailSectionTitle: {
+    fontSize: responsive(13, 15),
+    fontWeight: "900",
+    marginBottom: responsive(8, 12),
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+  },
+
+  detailDescription: {
+    fontSize: responsive(14.5, 17),
+    lineHeight: responsive(22, 27),
+    fontWeight: "600",
+  },
+
+  detailActions: {
+    flexDirection: "row",
+    gap: responsive(10, 14),
+    marginTop: responsive(14, 22),
+  },
+
+  detailEditFancyButton: {
+    flex: 1.15,
+    borderRadius: responsive(16, 20),
+    borderWidth: 1,
+    overflow: "hidden",
+  },
+
+  detailEditFancyContent: {
+    height: responsive(48, 58),
+    paddingLeft: responsive(8, 12),
+    paddingRight: responsive(14, 18),
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  detailEditIconBox: {
+    width: responsive(31, 38),
+    height: responsive(31, 38),
+    borderRadius: 999,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: responsive(8, 10),
+  },
+
+  detailEditFancyText: {
+    fontSize: responsive(13.5, 16),
+    fontWeight: "900",
+  },
+
+  detailCloseButton: {
+    flex: 0.85,
+    borderRadius: responsive(16, 20),
+    elevation: 0,
+  },
+
+  detailButtonContent: {
+    height: responsive(48, 58),
+  },
+
+  detailButtonLabel: {
+    fontSize: responsive(13.5, 16),
     fontWeight: "900",
   },
 
@@ -1341,62 +2132,65 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.42)",
     justifyContent: "center",
-    paddingHorizontal: 22,
+    paddingHorizontal: responsive(22, 34),
   },
 
   deleteModal: {
-    borderRadius: 28,
+    width: "100%",
+    maxWidth: responsive(undefined, 560),
+    alignSelf: "center",
+    borderRadius: responsive(28, 34),
     borderWidth: 1,
     elevation: 0,
     overflow: "hidden",
   },
 
   deleteContent: {
-    padding: 22,
+    padding: responsive(22, 32),
     alignItems: "center",
   },
 
   deleteIconBox: {
-    width: 58,
-    height: 58,
-    borderRadius: 20,
+    width: responsive(58, 74),
+    height: responsive(58, 74),
+    borderRadius: responsive(20, 25),
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 16,
+    marginBottom: responsive(16, 22),
   },
 
   deleteTitle: {
-    fontSize: 21,
+    fontSize: responsive(21, 27),
     fontWeight: "900",
     letterSpacing: -0.35,
     textAlign: "center",
   },
 
   deleteText: {
-    marginTop: 8,
-    fontSize: 13.5,
-    lineHeight: 20,
+    marginTop: responsive(8, 12),
+    fontSize: responsive(13.5, 16),
+    lineHeight: responsive(20, 24),
     textAlign: "center",
   },
 
   deletePreview: {
     width: "100%",
-    borderRadius: 18,
+    borderRadius: responsive(18, 22),
     borderWidth: 1,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    marginTop: 16,
+    paddingHorizontal: responsive(14, 20),
+    paddingVertical: responsive(12, 16),
+    marginTop: responsive(16, 22),
   },
 
   deletePreviewTitle: {
-    fontSize: 14,
+    fontSize: responsive(14, 17),
     fontWeight: "900",
     textAlign: "center",
   },
 
   deletePreviewSubtitle: {
-    marginTop: 3,
-    fontSize: 12.5,
+    marginTop: responsive(3, 5),
+    fontSize: responsive(12.5, 15),
     fontWeight: "700",
     textAlign: "center",
   },
@@ -1404,28 +2198,81 @@ const styles = StyleSheet.create({
   deleteActions: {
     width: "100%",
     flexDirection: "row",
-    gap: 10,
-    marginTop: 20,
+    gap: responsive(10, 14),
+    marginTop: responsive(20, 28),
   },
 
   cancelDeleteButton: {
     flex: 1,
-    borderRadius: 16,
+    borderRadius: responsive(16, 20),
     elevation: 0,
   },
 
   confirmDeleteButton: {
     flex: 1,
-    borderRadius: 16,
+    borderRadius: responsive(16, 20),
     elevation: 0,
   },
 
   deleteButtonContent: {
-    height: 48,
+    height: responsive(48, 58),
   },
 
   deleteButtonLabel: {
-    fontSize: 13.5,
+    fontSize: responsive(13.5, 16),
     fontWeight: "900",
+  },
+
+  skeletonProjectBadge: {
+    width: responsive(52, 68),
+    height: responsive(52, 68),
+    borderRadius: responsive(18, 23),
+    marginRight: responsive(12, 18),
+  },
+
+  skeletonTitle: {
+    width: "82%",
+    height: responsive(17, 22),
+    borderRadius: 999,
+    marginBottom: responsive(8, 11),
+  },
+
+  skeletonSubtitle: {
+    width: "54%",
+    height: responsive(12, 15),
+    borderRadius: 999,
+  },
+
+  skeletonContentLine: {
+    width: "94%",
+    height: responsive(13, 16),
+    borderRadius: 999,
+    marginBottom: responsive(9, 12),
+  },
+
+  skeletonContentLineTwo: {
+    width: "82%",
+    height: responsive(13, 16),
+    borderRadius: 999,
+    marginBottom: responsive(9, 12),
+  },
+
+  skeletonContentLineSmall: {
+    width: "58%",
+    height: responsive(13, 16),
+    borderRadius: 999,
+  },
+
+  skeletonCopyButton: {
+    width: responsive(94, 124),
+    height: responsive(38, 48),
+    borderRadius: 999,
+  },
+
+  skeletonAction: {
+    width: responsive(40, 50),
+    height: responsive(40, 50),
+    borderRadius: 999,
+    marginLeft: responsive(4, 7),
   },
 });

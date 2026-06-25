@@ -1,37 +1,52 @@
 //Importaciones:
 import React, { useEffect, useRef } from "react";
-import { Animated, Easing, Image, StyleSheet, View } from "react-native";
+import {
+    Animated,
+    Dimensions,
+    Easing,
+    Image,
+    StyleSheet,
+    View,
+    } from "react-native";
 import { ActivityIndicator, Text } from "react-native-paper";
 
-//Assets:
-const logoLight = require("../../assets/logo-light.png");
-const logoDark = require("../../assets/logo-dark.png");
+//Responsive:
+const { width } = Dimensions.get("window");
+const IS_TABLET = width >= 768;
 
-//Colores splash oscuro:
-const DARK_SPLASH_BACKGROUND = "#0B111E";
-const DARK_SPLASH_CARD = "#151D2E";
-const DARK_SPLASH_PRIMARY = "#2563EB";
-const DARK_SPLASH_SECONDARY = "#A7B0C2";
-const DARK_SPLASH_BORDER = "rgba(148, 163, 184, 0.18)";
-const DARK_GLOW_TOP = "rgba(37, 99, 235, 0.045)";
-const DARK_GLOW_BOTTOM = "rgba(37, 99, 235, 0.035)";
-const DARK_FOOTER = "rgba(167, 176, 194, 0.72)";
+const responsive = (mobile, tablet) => {
+    return IS_TABLET ? tablet : mobile;
+    };
 
-//Colores splash claro:
-const LIGHT_SPLASH_BACKGROUND = "#F9F9F9";
-const LIGHT_SPLASH_CARD = "#FFFFFF";
-const LIGHT_SPLASH_PRIMARY = "#2563EB";
-const LIGHT_SPLASH_SECONDARY = "#64748B";
-const LIGHT_SPLASH_BORDER = "rgba(15, 23, 42, 0.1)";
-const LIGHT_GLOW_TOP = "rgba(37, 99, 235, 0.055)";
-const LIGHT_GLOW_BOTTOM = "rgba(37, 99, 235, 0.035)";
-const LIGHT_FOOTER = "rgba(100, 116, 139, 0.82)";
+    //Assets:
+    const logoLight = require("../../assets/logo-light.png");
+    const logoDark = require("../../assets/logo-dark.png");
 
-//Config logo:
-const LOGO_ZOOM = 3.2;
-const CONTENT_OFFSET_Y = 12;
+    //Colores splash oscuro:
+    const DARK_SPLASH_BACKGROUND = "#0B111E";
+    const DARK_SPLASH_CARD = "#151D2E";
+    const DARK_SPLASH_PRIMARY = "#2563EB";
+    const DARK_SPLASH_SECONDARY = "#A7B0C2";
+    const DARK_SPLASH_BORDER = "rgba(148, 163, 184, 0.18)";
+    const DARK_GLOW_TOP = "rgba(37, 99, 235, 0.045)";
+    const DARK_GLOW_BOTTOM = "rgba(37, 99, 235, 0.035)";
+    const DARK_FOOTER = "rgba(167, 176, 194, 0.72)";
 
-export default function SplashScreen({ theme }) {
+    //Colores splash claro:
+    const LIGHT_SPLASH_BACKGROUND = "#F9F9F9";
+    const LIGHT_SPLASH_CARD = "#FFFFFF";
+    const LIGHT_SPLASH_PRIMARY = "#2563EB";
+    const LIGHT_SPLASH_SECONDARY = "#64748B";
+    const LIGHT_SPLASH_BORDER = "rgba(15, 23, 42, 0.1)";
+    const LIGHT_GLOW_TOP = "rgba(37, 99, 235, 0.055)";
+    const LIGHT_GLOW_BOTTOM = "rgba(37, 99, 235, 0.035)";
+    const LIGHT_FOOTER = "rgba(100, 116, 139, 0.82)";
+
+    //Config logo:
+    const LOGO_ZOOM = responsive(3.2, 3.35);
+    const CONTENT_OFFSET_Y = responsive(12, 18);
+
+    export default function SplashScreen({ theme }) {
     const fadeAnim = useRef(new Animated.Value(0)).current;
     const scaleAnim = useRef(new Animated.Value(0.92)).current;
     const translateAnim = useRef(new Animated.Value(10)).current;
@@ -151,63 +166,64 @@ export default function SplashScreen({ theme }) {
         flex: 1,
         alignItems: "center",
         justifyContent: "center",
-        paddingHorizontal: 28,
+        paddingHorizontal: responsive(28, 42),
     },
 
     topGlow: {
         position: "absolute",
-        top: -135,
-        right: -125,
-        width: 285,
-        height: 285,
+        top: responsive(-135, -185),
+        right: responsive(-125, -170),
+        width: responsive(285, 390),
+        height: responsive(285, 390),
         borderRadius: 999,
     },
 
     bottomGlow: {
         position: "absolute",
-        bottom: -155,
-        left: -140,
-        width: 305,
-        height: 305,
+        bottom: responsive(-155, -210),
+        left: responsive(-140, -190),
+        width: responsive(305, 430),
+        height: responsive(305, 430),
         borderRadius: 999,
     },
 
     content: {
         width: "100%",
+        maxWidth: responsive(undefined, 620),
         alignItems: "center",
     },
 
     logoWrap: {
-        width: 210,
-        height: 150,
+        width: responsive(210, 290),
+        height: responsive(150, 205),
         alignItems: "center",
         justifyContent: "center",
         overflow: "visible",
     },
 
     logo: {
-        width: 150,
-        height: 105,
+        width: responsive(150, 190),
+        height: responsive(105, 132),
     },
 
     subtitle: {
-        marginTop: 30,
-        fontSize: 13.5,
-        lineHeight: 20,
+        marginTop: responsive(30, 42),
+        fontSize: responsive(13.5, 17),
+        lineHeight: responsive(20, 25),
         fontWeight: "700",
         textAlign: "center",
     },
 
     loaderBox: {
-        marginTop: 30,
-        minWidth: 175,
-        height: 48,
+        marginTop: responsive(30, 42),
+        minWidth: responsive(175, 220),
+        height: responsive(48, 60),
         borderRadius: 999,
         borderWidth: 1,
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "center",
-        paddingHorizontal: 18,
+        paddingHorizontal: responsive(18, 24),
 
         shadowColor: "#0F172A",
         shadowOffset: {
@@ -220,15 +236,15 @@ export default function SplashScreen({ theme }) {
     },
 
     loaderText: {
-        marginLeft: 10,
-        fontSize: 12.5,
+        marginLeft: responsive(10, 13),
+        fontSize: responsive(12.5, 15),
         fontWeight: "800",
     },
 
     footer: {
         position: "absolute",
-        bottom: 75,
-        fontSize: 12,
+        bottom: responsive(75, 95),
+        fontSize: responsive(12, 14),
         fontWeight: "700",
         textAlign: "center",
     },

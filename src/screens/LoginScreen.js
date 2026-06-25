@@ -1,6 +1,7 @@
 //Importaciones:
 import React, { useRef, useState } from "react";
 import {
+  Dimensions,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -12,14 +13,24 @@ import { Button, Card, Text, TextInput } from "react-native-paper";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useAuth } from "../context/AuthContext";
 
+//Responsive:
+const { width } = Dimensions.get("window");
+const IS_TABLET = width >= 768;
+
+const responsive = (mobile, tablet) => {
+  return IS_TABLET ? tablet : mobile;
+};
+
 //JS:
 //Assets:
 const logoLight = require("../../assets/logo-light.png");
 const logoDark = require("../../assets/logo-dark.png");
-const LOGO_ZOOM = 3;
-const LOGO_AREA_HEIGHT = 208;
-const LOGO_FRAME_WIDTH = 255;
-const LOGO_FRAME_HEIGHT = 125;
+
+const LOGO_ZOOM = responsive(3, 3.15);
+const LOGO_AREA_HEIGHT = responsive(208, 270);
+const LOGO_FRAME_WIDTH = responsive(255, 335);
+const LOGO_FRAME_HEIGHT = responsive(125, 165);
+
 const DARK_LOGIN_BACKGROUND = "#0B111E";
 const DARK_CARD_BACKGROUND = "#151D2E";
 const DARK_INPUT_BACKGROUND = "#080D18";
@@ -70,9 +81,7 @@ export default function LoginScreen({ theme }) {
     ? DARK_LOGIN_BACKGROUND
     : LIGHT_LOGIN_BACKGROUND;
 
-  const cardBackground = isDark
-    ? DARK_CARD_BACKGROUND
-    : LIGHT_CARD_BACKGROUND;
+  const cardBackground = isDark ? DARK_CARD_BACKGROUND : LIGHT_CARD_BACKGROUND;
 
   const inputBackground = isDark
     ? DARK_INPUT_BACKGROUND
@@ -93,7 +102,7 @@ export default function LoginScreen({ theme }) {
   function handleInputFocus() {
     setTimeout(() => {
       scrollRef.current?.scrollTo({
-        y: 230,
+        y: responsive(230, 260),
         animated: true,
       });
     }, 250);
@@ -182,7 +191,7 @@ export default function LoginScreen({ theme }) {
                 >
                   <MaterialCommunityIcons
                     name="login-variant"
-                    size={22}
+                    size={responsive(22, 29)}
                     color={theme.colors.primary}
                   />
                 </View>
@@ -216,6 +225,7 @@ export default function LoginScreen({ theme }) {
                 autoCapitalize="none"
                 autoCorrect={false}
                 style={[styles.input, { backgroundColor: inputBackground }]}
+                contentStyle={styles.inputContent}
                 outlineStyle={[
                   styles.inputOutline,
                   {
@@ -246,6 +256,7 @@ export default function LoginScreen({ theme }) {
                 secureTextEntry={securePassword}
                 autoCapitalize="none"
                 style={[styles.input, { backgroundColor: inputBackground }]}
+                contentStyle={styles.inputContent}
                 outlineStyle={[
                   styles.inputOutline,
                   {
@@ -286,7 +297,7 @@ export default function LoginScreen({ theme }) {
                 >
                   <MaterialCommunityIcons
                     name="alert-circle-outline"
-                    size={18}
+                    size={responsive(18, 23)}
                     color={theme.colors.danger}
                   />
 
@@ -335,41 +346,44 @@ const styles = StyleSheet.create({
 
   content: {
     flex: 1,
+    width: "100%",
+    maxWidth: responsive(undefined, 620),
+    alignSelf: "center",
     justifyContent: "center",
-    paddingHorizontal: 22,
-    paddingTop: 18,
-    paddingBottom: 34,
+    paddingHorizontal: responsive(22, 34),
+    paddingTop: responsive(18, 34),
+    paddingBottom: responsive(34, 54),
   },
 
   logoArea: {
     alignItems: "center",
     justifyContent: "flex-start",
-    marginBottom: 22,
+    marginBottom: responsive(22, 30),
   },
 
   logoFrame: {
     alignItems: "center",
     justifyContent: "center",
     overflow: "visible",
-    marginTop: 16,
+    marginTop: responsive(16, 20),
   },
 
   logo: {
-    width: 150,
-    height: 105,
+    width: responsive(150, 190),
+    height: responsive(105, 132),
   },
 
   subtitle: {
-    marginTop: 40,
-    maxWidth: 315,
+    marginTop: responsive(40, 54),
+    maxWidth: responsive(315, 460),
     textAlign: "center",
-    fontSize: 13.5,
-    lineHeight: 20,
+    fontSize: responsive(13.5, 16),
+    lineHeight: responsive(20, 24),
     fontWeight: "700",
   },
 
   card: {
-    borderRadius: 28,
+    borderRadius: responsive(28, 34),
     borderWidth: 1,
     elevation: 0,
     overflow: "hidden",
@@ -384,22 +398,22 @@ const styles = StyleSheet.create({
   },
 
   cardContent: {
-    padding: 20,
+    padding: responsive(20, 30),
   },
 
   cardHeader: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 18,
+    marginBottom: responsive(18, 26),
   },
 
   iconBox: {
-    width: 44,
-    height: 44,
-    borderRadius: 16,
+    width: responsive(44, 58),
+    height: responsive(44, 58),
+    borderRadius: responsive(16, 20),
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 12,
+    marginRight: responsive(12, 16),
   },
 
   cardHeaderText: {
@@ -407,66 +421,70 @@ const styles = StyleSheet.create({
   },
 
   title: {
-    fontSize: 22,
-    lineHeight: 27,
+    fontSize: responsive(22, 29),
+    lineHeight: responsive(27, 35),
     fontWeight: "900",
     letterSpacing: -0.4,
   },
 
   cardSubtitle: {
-    marginTop: 2,
-    fontSize: 12.8,
-    lineHeight: 18,
+    marginTop: responsive(2, 4),
+    fontSize: responsive(12.8, 15.5),
+    lineHeight: responsive(18, 22),
     fontWeight: "700",
   },
 
   input: {
-    marginBottom: 12,
+    marginBottom: responsive(12, 16),
+  },
+
+  inputContent: {
+    fontSize: responsive(14, 16),
   },
 
   inputOutline: {
-    borderRadius: 16,
+    borderRadius: responsive(16, 20),
   },
 
   errorBox: {
     borderWidth: 1,
-    borderRadius: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    borderRadius: responsive(16, 20),
+    paddingHorizontal: responsive(12, 16),
+    paddingVertical: responsive(10, 13),
     flexDirection: "row",
     alignItems: "center",
-    marginTop: 2,
-    marginBottom: 12,
+    marginTop: responsive(2, 4),
+    marginBottom: responsive(12, 16),
   },
 
   errorText: {
     flex: 1,
-    marginLeft: 8,
-    fontSize: 12.8,
-    lineHeight: 18,
+    marginLeft: responsive(8, 11),
+    fontSize: responsive(12.8, 15),
+    lineHeight: responsive(18, 22),
     fontWeight: "800",
   },
 
   button: {
-    borderRadius: 18,
+    borderRadius: responsive(18, 22),
     elevation: 0,
-    marginTop: 4,
+    marginTop: responsive(4, 8),
   },
 
   buttonContent: {
-    height: 52,
+    height: responsive(52, 62),
     flexDirection: "row-reverse",
   },
 
   buttonLabel: {
-    fontSize: 14.5,
+    fontSize: responsive(14.5, 17),
     fontWeight: "900",
   },
 
   footerText: {
-    marginTop: 18,
+    marginTop: responsive(18, 26),
     textAlign: "center",
-    fontSize: 12,
+    fontSize: responsive(12, 14),
     fontWeight: "700",
   },
 });

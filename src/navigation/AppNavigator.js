@@ -170,7 +170,7 @@ function TabIconLabel({ routeName, color, focused, styles }) {
     <View style={styles.tabContent}>
       <MaterialCommunityIcons
         name={iconName}
-        size={31}
+        size={30}
         color={color}
         style={styles.tabIcon}
       />
@@ -219,7 +219,7 @@ function MoreStack({ theme, isDarkMode, setIsDarkMode }) {
       </Stack.Screen>
 
       <Stack.Screen name="BaseDeDatos">
-        {(props) => <DatabaseScreen {...props} theme={theme} />}
+        {(props) => <DataBaseScreen {...props} theme={theme} />}
       </Stack.Screen>
 
       <Stack.Screen name="Notas">
@@ -303,8 +303,8 @@ export default function AppNavigator({ theme, isDarkMode, setIsDarkMode }) {
             backgroundColor: tabBackground,
             borderTopColor: tabBorder,
             borderTopWidth: 1,
-            height: 110,
-            paddingTop: 4,
+            height: 114,
+            paddingTop: 6,
             shadowColor,
             shadowOpacity: isDarkMode ? 0.28 : 0.08,
             shadowRadius: 14,
