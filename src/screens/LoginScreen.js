@@ -31,7 +31,7 @@ const LOGO_AREA_HEIGHT = responsive(208, 270);
 const LOGO_FRAME_WIDTH = responsive(255, 335);
 const LOGO_FRAME_HEIGHT = responsive(125, 165);
 
-const DARK_LOGIN_BACKGROUND = "#0B111E";
+const DARK_LOGIN_BACKGROUND = "#0a101f";
 const DARK_CARD_BACKGROUND = "#151D2E";
 const DARK_INPUT_BACKGROUND = "#080D18";
 const DARK_BORDER = "rgba(148, 163, 184, 0.22)";
