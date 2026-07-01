@@ -1,5 +1,5 @@
 //Importaciones:
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Alert,
   Dimensions,
@@ -21,7 +21,10 @@ import {
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as ImagePicker from "expo-image-picker";
+import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
+import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { useAuth } from "../context/AuthContext";
+import { db, storage } from "../firebase/firebaseConfig";
 import {
   cancelTaskReminderNotification,
   prepareNotifications,
@@ -50,9 +53,6 @@ const NOTIFICATION_HOURS = [
 
 const NOTIFICATIONS_ENABLED_KEY = "codedesk_notifications_enabled";
 const NOTIFICATION_TIME_KEY = "codedesk_notification_time";
-
-const getProfileNameKey = (uid) => `codedesk_profile_name_${uid || "local"}`;
-const getProfileImageKey = (uid) => `codedesk_profile_image_${uid || "local"}`;
 
 function normalizeTime(value) {
   const clean = String(value || "").trim();
@@ -257,23 +257,19 @@ export default function ProfileScreen({ theme, isDarkMode, setIsDarkMode }) {
   const { user } = useAuth();
 
   const email = user?.email || "Sin email";
-  const initial = email.charAt(0).toUpperCase();
-
-  const profileNameKey = useMemo(() => {
-    return getProfileNameKey(user?.uid);
-  }, [user?.uid]);
-
-  const profileImageKey = useMemo(() => {
-    return getProfileImageKey(user?.uid);
-  }, [user?.uid]);
 
   const [profileName, setProfileName] = useState("Ajustes de CodeDesk");
   const [profileImageUri, setProfileImageUri] = useState(null);
   const [editingName, setEditingName] = useState(false);
+  const [savingProfile, setSavingProfile] = useState(false);
 
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [notificationTime, setNotificationTime] = useState("10:00");
   const [notificationTimeInput, setNotificationTimeInput] = useState("10:00");
+
+  const initial = profileName?.trim()
+    ? profileName.trim().charAt(0).toUpperCase()
+    : email.charAt(0).toUpperCase();
 
   const selectedHourLabel = notificationsEnabled
     ? `Todos los días a las ${notificationTime}`
@@ -288,9 +284,6 @@ export default function ProfileScreen({ theme, isDarkMode, setIsDarkMode }) {
 
         const storedTime = await AsyncStorage.getItem(NOTIFICATION_TIME_KEY);
 
-        const storedProfileName = await AsyncStorage.getItem(profileNameKey);
-        const storedProfileImage = await AsyncStorage.getItem(profileImageKey);
-
         if (storedEnabled !== null) {
           setNotificationsEnabled(storedEnabled === "true");
         }
@@ -299,42 +292,120 @@ export default function ProfileScreen({ theme, isDarkMode, setIsDarkMode }) {
           setNotificationTime(storedTime);
           setNotificationTimeInput(storedTime);
         }
-
-        if (storedProfileName?.trim()) {
-          setProfileName(storedProfileName);
-        }
-
-        if (storedProfileImage) {
-          setProfileImageUri(storedProfileImage);
-        }
       } catch (error) {
         console.log("Error cargando configuración:", error);
       }
     }
 
     loadSettings();
-  }, [profileNameKey, profileImageKey]);
+  }, []);
+
+  useEffect(() => {
+    async function loadUserProfile() {
+      try {
+        if (!user?.uid) {
+          return;
+        }
+
+        const userRef = doc(db, "users", user.uid);
+        const userSnapshot = await getDoc(userRef);
+
+        if (userSnapshot.exists()) {
+          const data = userSnapshot.data();
+
+          const backendName =
+            data.name ||
+            data.nombreCompleto ||
+            user.displayName ||
+            "Ajustes de CodeDesk";
+
+          const backendImage = data.profileImageUrl || null;
+
+          setProfileName(backendName);
+          setProfileImageUri(backendImage);
+          return;
+        }
+
+        await setDoc(
+          userRef,
+          {
+            uid: user.uid,
+            email: user.email || null,
+            name: "Ajustes de CodeDesk",
+            nombreCompleto: "Ajustes de CodeDesk",
+            profileImageUrl: null,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true }
+        );
+
+        setProfileName("Ajustes de CodeDesk");
+        setProfileImageUri(null);
+      } catch (error) {
+        console.log("Error cargando perfil:", error);
+        Alert.alert("Error", "No se pudo cargar tu perfil.");
+      }
+    }
+
+    loadUserProfile();
+  }, [user?.uid, user?.email, user?.displayName]);
 
   async function handleSaveProfileName() {
     try {
-      const cleanName = profileName.trim();
-
-      if (!cleanName) {
-        setProfileName("Ajustes de CodeDesk");
-        await AsyncStorage.setItem(profileNameKey, "Ajustes de CodeDesk");
-      } else {
-        await AsyncStorage.setItem(profileNameKey, cleanName);
+      if (!user?.uid) {
+        Alert.alert("Error", "No se pudo identificar el usuario.");
+        return;
       }
 
+      const cleanName = profileName.trim() || "Ajustes de CodeDesk";
+
+      setSavingProfile(true);
+
+      await setDoc(
+        doc(db, "users", user.uid),
+        {
+          uid: user.uid,
+          email: user.email || null,
+          name: cleanName,
+          nombreCompleto: cleanName,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+
+      setProfileName(cleanName);
       setEditingName(false);
     } catch (error) {
       console.log("Error guardando nombre:", error);
       Alert.alert("Error", "No se pudo guardar el nombre.");
+    } finally {
+      setSavingProfile(false);
     }
+  }
+
+  async function uploadImageToStorage(uri) {
+    const response = await fetch(uri);
+    const blob = await response.blob();
+
+    const fileName = `profile-${Date.now()}.jpg`;
+
+    const imageRef = ref(storage, `users/${user.uid}/profile/${fileName}`);
+
+    await uploadBytes(imageRef, blob);
+
+    const downloadUrl = await getDownloadURL(imageRef);
+
+    return downloadUrl;
   }
 
   async function handlePickProfileImage() {
     try {
+      if (!user?.uid) {
+        Alert.alert("Error", "No se pudo identificar el usuario.");
+        return;
+      }
+
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
       if (!permission.granted) {
@@ -362,20 +433,27 @@ export default function ProfileScreen({ theme, isDarkMode, setIsDarkMode }) {
         return;
       }
 
-      setProfileImageUri(uri);
-      await AsyncStorage.setItem(profileImageKey, uri);
+      setSavingProfile(true);
+
+      const downloadUrl = await uploadImageToStorage(uri);
+
+      await setDoc(
+        doc(db, "users", user.uid),
+        {
+          uid: user.uid,
+          email: user.email || null,
+          profileImageUrl: downloadUrl,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+
+      setProfileImageUri(downloadUrl);
     } catch (error) {
       console.log("Error seleccionando imagen:", error);
-      Alert.alert("Error", "No se pudo seleccionar la imagen.");
-    }
-  }
-
-  async function handleRemoveProfileImage() {
-    try {
-      setProfileImageUri(null);
-      await AsyncStorage.removeItem(profileImageKey);
-    } catch (error) {
-      console.log("Error eliminando imagen:", error);
+      Alert.alert("Error", "No se pudo guardar la imagen.");
+    } finally {
+      setSavingProfile(false);
     }
   }
 
@@ -479,7 +557,8 @@ export default function ProfileScreen({ theme, isDarkMode, setIsDarkMode }) {
           <View style={styles.avatarWrap}>
             <TouchableRipple
               borderless
-              onPress={handlePickProfileImage}
+              onPress={savingProfile ? undefined : handlePickProfileImage}
+              disabled={savingProfile}
               rippleColor={theme.colors.primarySoft}
               style={[
                 styles.configAvatar,
@@ -490,6 +569,7 @@ export default function ProfileScreen({ theme, isDarkMode, setIsDarkMode }) {
                   borderColor: profileImageUri
                     ? theme.colors.borderSoft
                     : theme.colors.primary,
+                  opacity: savingProfile ? 0.65 : 1,
                 },
               ]}
             >
@@ -553,6 +633,7 @@ export default function ProfileScreen({ theme, isDarkMode, setIsDarkMode }) {
                   outlineStyle={styles.nameInputOutline}
                   contentStyle={styles.nameInputContent}
                   autoFocus
+                  disabled={savingProfile}
                   onSubmitEditing={handleSaveProfileName}
                   returnKeyType="done"
                 />
@@ -564,7 +645,19 @@ export default function ProfileScreen({ theme, isDarkMode, setIsDarkMode }) {
                   iconColor={theme.colors.success}
                   containerColor={theme.colors.successSoft}
                   style={styles.nameActionButton}
+                  disabled={savingProfile}
                   onPress={handleSaveProfileName}
+                />
+
+                <IconButton
+                  icon="close"
+                  size={responsive(18, 23)}
+                  mode="contained-tonal"
+                  iconColor={theme.colors.secondary}
+                  containerColor={theme.colors.surfaceSoft}
+                  style={styles.nameActionButton}
+                  disabled={savingProfile}
+                  onPress={() => setEditingName(false)}
                 />
               </View>
             ) : (
@@ -583,6 +676,7 @@ export default function ProfileScreen({ theme, isDarkMode, setIsDarkMode }) {
                   iconColor={theme.colors.primary}
                   containerColor={theme.colors.primarySoft}
                   style={styles.editNameButton}
+                  disabled={savingProfile}
                   onPress={() => setEditingName(true)}
                 />
               </View>
@@ -614,29 +708,9 @@ export default function ProfileScreen({ theme, isDarkMode, setIsDarkMode }) {
                 <Text
                   style={[styles.badgeText, { color: theme.colors.success }]}
                 >
-                  Sesión activa
+                  {savingProfile ? "Guardando..." : "Sesión activa"}
                 </Text>
               </View>
-
-              {profileImageUri && (
-                <TouchableRipple
-                  borderless
-                  onPress={handleRemoveProfileImage}
-                  rippleColor={theme.colors.dangerSoft}
-                  style={[
-                    styles.removeImageButton,
-                    {
-                      backgroundColor: theme.colors.dangerSoft,
-                    },
-                  ]}
-                >
-                  <MaterialCommunityIcons
-                    name="image-remove-outline"
-                    size={responsive(17, 21)}
-                    color={theme.colors.danger}
-                  />
-                </TouchableRipple>
-              )}
             </View>
           </View>
         </View>
@@ -1010,16 +1084,6 @@ const styles = StyleSheet.create({
     marginLeft: responsive(5, 7),
     fontSize: responsive(12, 14),
     fontWeight: "800",
-  },
-
-  removeImageButton: {
-    width: responsive(32, 40),
-    height: responsive(32, 40),
-    borderRadius: 999,
-    alignItems: "center",
-    justifyContent: "center",
-    marginLeft: responsive(8, 11),
-    overflow: "hidden",
   },
 
   sectionTitle: {
