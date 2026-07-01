@@ -204,14 +204,7 @@ function MoreStack({ theme, isDarkMode, setIsDarkMode }) {
       }}
     >
       <Stack.Screen name="MasHome">
-        {(props) => (
-          <MoreScreen
-            {...props}
-            theme={theme}
-            isDarkMode={isDarkMode}
-            setIsDarkMode={setIsDarkMode}
-          />
-        )}
+        {(props) => <MoreScreen {...props} theme={theme} />}
       </Stack.Screen>
 
       <Stack.Screen name="Credenciales">
@@ -230,7 +223,7 @@ function MoreStack({ theme, isDarkMode, setIsDarkMode }) {
         {(props) => <StatsScreen {...props} theme={theme} />}
       </Stack.Screen>
 
-      <Stack.Screen name="Perfil">
+      <Stack.Screen name="Configuracion">
         {(props) => (
           <ProfileScreen
             {...props}

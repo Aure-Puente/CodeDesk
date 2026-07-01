@@ -1,9 +1,17 @@
 //Importaciones:
-import React from "react";
-import { Alert, Dimensions, ScrollView, StyleSheet, View } from "react-native";
-import { Card, Divider, Switch, Text, TouchableRipple } from "react-native-paper";
+import React, { useState } from "react";
+import {
+  Alert,
+  Dimensions,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  View,
+} from "react-native";
+import { Button, Card, Divider, Text, TouchableRipple } from "react-native-paper";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as LocalAuthentication from "expo-local-authentication";
+import { useAuth } from "../context/AuthContext";
 
 //Responsive:
 const { width } = Dimensions.get("window");
@@ -42,10 +50,10 @@ const MENU_ITEMS = [
     route: "Estadisticas",
   },
   {
-    title: "Perfil",
-    description: "Cuenta, configuración y sesión",
-    icon: "account-outline",
-    route: "Perfil",
+    title: "Configuración",
+    description: "Tema, notificaciones, horario y preferencias generales",
+    icon: "cog-outline",
+    route: "Configuracion",
   },
 ];
 
@@ -91,7 +99,7 @@ function MenuRow({ item, theme, onPress, showDivider }) {
 
           {item.protected && (
             <MaterialCommunityIcons
-              name="fingerprint"
+              name="shield-lock-outline"
               size={responsive(21, 27)}
               color={theme.colors.primary}
               style={styles.fingerprint}
@@ -121,48 +129,103 @@ function MenuRow({ item, theme, onPress, showDivider }) {
   );
 }
 
-export default function MoreScreen({
-  theme,
-  navigation,
-  isDarkMode,
-  setIsDarkMode,
-}) {
+export default function MoreScreen({ theme, navigation }) {
+  const { logout } = useAuth();
+
+  const [logoutModalVisible, setLogoutModalVisible] = useState(false);
+
+  async function requestLocalAccess(item) {
+    try {
+      const securityLevel = await LocalAuthentication.getEnrolledLevelAsync();
+
+      const hasAnyDeviceSecurity =
+        securityLevel === LocalAuthentication.SecurityLevel.SECRET ||
+        securityLevel === LocalAuthentication.SecurityLevel.BIOMETRIC_WEAK ||
+        securityLevel === LocalAuthentication.SecurityLevel.BIOMETRIC_STRONG;
+
+      if (!hasAnyDeviceSecurity) {
+        Alert.alert(
+          "Seguridad no configurada",
+          "Para acceder a esta sección, primero configurá un PIN, patrón, contraseña, huella o rostro en tu dispositivo."
+        );
+        return false;
+      }
+
+      const result = await LocalAuthentication.authenticateAsync({
+        promptMessage: `Acceder a ${item.title}`,
+        promptSubtitle: "Usá huella, rostro, PIN, patrón o contraseña",
+        promptDescription:
+          "Esta sección contiene información sensible de tus proyectos.",
+        cancelLabel: "Cancelar",
+        fallbackLabel: "Usar PIN",
+        disableDeviceFallback: false,
+        requireConfirmation: true,
+      });
+
+      if (result.success) {
+        return true;
+      }
+
+      if (result.error === "user_cancel" || result.error === "system_cancel") {
+        return false;
+      }
+
+      if (result.error === "passcode_not_set") {
+        Alert.alert(
+          "PIN no configurado",
+          "Configurá un PIN, patrón o contraseña en tu dispositivo para poder acceder."
+        );
+        return false;
+      }
+
+      if (result.error === "not_enrolled") {
+        Alert.alert(
+          "Seguridad no configurada",
+          "Configurá un PIN, patrón, contraseña, huella o rostro en tu dispositivo para poder acceder."
+        );
+        return false;
+      }
+
+      if (result.error === "lockout") {
+        Alert.alert(
+          "Acceso bloqueado temporalmente",
+          "Intentaste autenticarte varias veces. Probá nuevamente usando el bloqueo del dispositivo."
+        );
+        return false;
+      }
+
+      Alert.alert(
+        "No se pudo verificar",
+        "No pudimos validar tu identidad. Intentá nuevamente."
+      );
+
+      return false;
+    } catch (error) {
+      Alert.alert(
+        "Error de autenticación",
+        "Ocurrió un problema al intentar verificar tu identidad."
+      );
+
+      return false;
+    }
+  }
+
   async function handleNavigate(item) {
     if (!item.protected) {
       navigation.navigate(item.route);
       return;
     }
 
-    const hasHardware = await LocalAuthentication.hasHardwareAsync();
+    const canAccess = await requestLocalAccess(item);
 
-    if (!hasHardware) {
-      Alert.alert(
-        "Biometría no disponible",
-        "Este dispositivo no tiene lector biométrico disponible."
-      );
-      return;
-    }
-
-    const isEnrolled = await LocalAuthentication.isEnrolledAsync();
-
-    if (!isEnrolled) {
-      Alert.alert(
-        "Biometría no configurada",
-        "Primero configurá huella, rostro o bloqueo de pantalla en tu dispositivo."
-      );
-      return;
-    }
-
-    const result = await LocalAuthentication.authenticateAsync({
-      promptMessage: `Acceder a ${item.title}`,
-      cancelLabel: "Cancelar",
-      fallbackLabel: "Usar bloqueo del dispositivo",
-      disableDeviceFallback: false,
-    });
-
-    if (result.success) {
+    if (canAccess) {
       navigation.navigate(item.route);
     }
+  }
+
+  async function handleLogout() {
+    await logout();
+    setLogoutModalVisible(false);
   }
 
   return (
@@ -216,48 +279,88 @@ export default function MoreScreen({
         </View>
       </Card>
 
-      <Card
-        mode="contained"
-        style={[
-          styles.themeCard,
-          {
-            backgroundColor: theme.colors.surface,
-            borderColor: theme.colors.borderSoft || theme.colors.outline,
-          },
-        ]}
+      <Button
+        mode="contained-tonal"
+        icon="logout"
+        textColor={theme.colors.danger}
+        buttonColor={theme.colors.dangerSoft}
+        style={styles.logoutButton}
+        contentStyle={styles.logoutButtonContent}
+        labelStyle={styles.logoutButtonLabel}
+        onPress={() => setLogoutModalVisible(true)}
       >
-        <View style={styles.themeRow}>
-          <View
+        Cerrar sesión
+      </Button>
+
+      <Modal visible={logoutModalVisible} animationType="fade" transparent>
+        <View style={styles.modalOverlay}>
+          <Card
+            mode="contained"
             style={[
-              styles.iconBox,
+              styles.logoutModal,
               {
-                backgroundColor:
-                  theme.colors.primarySoft || theme.colors.primary + "22",
+                backgroundColor: theme.colors.surface,
+                borderColor: theme.colors.borderSoft || theme.colors.outline,
               },
             ]}
           >
-            <MaterialCommunityIcons
-              name="theme-light-dark"
-              size={responsive(21, 27)}
-              color={theme.colors.primary}
-            />
-          </View>
+            <View style={styles.logoutModalContent}>
+              <View
+                style={[
+                  styles.logoutIconBox,
+                  { backgroundColor: theme.colors.dangerSoft },
+                ]}
+              >
+                <MaterialCommunityIcons
+                  name="logout"
+                  size={responsive(28, 36)}
+                  color={theme.colors.danger}
+                />
+              </View>
 
-          <View style={styles.rowText}>
-            <Text style={[styles.rowTitle, { color: theme.colors.text }]}>
-              Modo oscuro
-            </Text>
+              <Text
+                style={[styles.logoutModalTitle, { color: theme.colors.text }]}
+              >
+                Cerrar sesión
+              </Text>
 
-            <Text
-              style={[styles.rowDescription, { color: theme.colors.secondary }]}
-            >
-              {isDarkMode ? "Activado" : "Desactivado"}
-            </Text>
-          </View>
+              <Text
+                style={[
+                  styles.logoutModalText,
+                  { color: theme.colors.secondary },
+                ]}
+              >
+                ¿Seguro que querés salir de CodeDesk?
+              </Text>
 
-          <Switch value={isDarkMode} onValueChange={setIsDarkMode} />
+              <View style={styles.logoutActions}>
+                <Button
+                  mode="contained-tonal"
+                  style={styles.cancelButton}
+                  contentStyle={styles.modalButtonContent}
+                  labelStyle={styles.modalButtonLabel}
+                  onPress={() => setLogoutModalVisible(false)}
+                >
+                  Cancelar
+                </Button>
+
+                <Button
+                  mode="contained"
+                  icon="logout"
+                  buttonColor={theme.colors.danger}
+                  textColor="#FFFFFF"
+                  style={styles.confirmButton}
+                  contentStyle={styles.modalButtonContent}
+                  labelStyle={styles.modalButtonLabel}
+                  onPress={handleLogout}
+                >
+                  Salir
+                </Button>
+              </View>
+            </View>
+          </Card>
         </View>
-      </Card>
+      </Modal>
     </ScrollView>
   );
 }
@@ -273,7 +376,7 @@ const styles = StyleSheet.create({
     alignSelf: "center",
     paddingHorizontal: responsive(20, 34),
     paddingTop: responsive(6, 18),
-    paddingBottom: responsive(28, 60),
+    paddingBottom: responsive(135, 170),
   },
 
   header: {
@@ -363,19 +466,91 @@ const styles = StyleSheet.create({
     height: 1,
   },
 
-  themeCard: {
-    marginTop: responsive(14, 22),
-    borderRadius: responsive(22, 30),
+  logoutButton: {
+    marginTop: responsive(16, 24),
+    borderRadius: responsive(18, 22),
+    elevation: 0,
+  },
+
+  logoutButtonContent: {
+    height: responsive(50, 60),
+  },
+
+  logoutButtonLabel: {
+    fontSize: responsive(14, 16),
+    fontWeight: "900",
+  },
+
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.42)",
+    justifyContent: "center",
+    paddingHorizontal: responsive(22, 34),
+  },
+
+  logoutModal: {
+    width: "100%",
+    maxWidth: responsive(undefined, 560),
+    alignSelf: "center",
+    borderRadius: responsive(28, 34),
     borderWidth: 1,
     elevation: 0,
     overflow: "hidden",
   },
 
-  themeRow: {
-    minHeight: responsive(70, 88),
-    flexDirection: "row",
+  logoutModalContent: {
+    padding: responsive(22, 32),
     alignItems: "center",
-    paddingHorizontal: responsive(14, 22),
-    paddingVertical: responsive(10, 14),
+  },
+
+  logoutIconBox: {
+    width: responsive(58, 74),
+    height: responsive(58, 74),
+    borderRadius: responsive(20, 25),
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: responsive(16, 22),
+  },
+
+  logoutModalTitle: {
+    fontSize: responsive(21, 27),
+    fontWeight: "900",
+    letterSpacing: -0.35,
+    textAlign: "center",
+  },
+
+  logoutModalText: {
+    marginTop: responsive(8, 12),
+    fontSize: responsive(13.5, 16),
+    lineHeight: responsive(20, 24),
+    textAlign: "center",
+  },
+
+  logoutActions: {
+    width: "100%",
+    flexDirection: "row",
+    gap: responsive(10, 14),
+    marginTop: responsive(20, 28),
+  },
+
+  cancelButton: {
+    flex: 1,
+    borderRadius: responsive(16, 20),
+    elevation: 0,
+  },
+
+  confirmButton: {
+    flex: 1,
+    borderRadius: responsive(16, 20),
+    elevation: 0,
+  },
+
+  modalButtonContent: {
+    height: responsive(48, 58),
+  },
+
+  modalButtonLabel: {
+    fontSize: responsive(13.5, 16),
+    fontWeight: "900",
   },
 });

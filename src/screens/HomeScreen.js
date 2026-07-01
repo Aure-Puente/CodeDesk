@@ -1,7 +1,7 @@
 //Importaciones:
 import React, { useEffect, useMemo, useState } from "react";
 import { Dimensions, Image, ScrollView, StyleSheet, View } from "react-native";
-import { Card, Chip, ProgressBar, Text } from "react-native-paper";
+import { Card, Chip, Text } from "react-native-paper";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { collection, onSnapshot, query, where } from "firebase/firestore";
 import { db } from "../firebase/firebaseConfig";
@@ -88,13 +88,24 @@ export default function HomeScreen({ theme }) {
 
   const [tasks, setTasks] = useState([]);
   const [projects, setProjects] = useState([]);
+  const [notes, setNotes] = useState([]);
+
   const [tasksLoaded, setTasksLoaded] = useState(false);
   const [projectsLoaded, setProjectsLoaded] = useState(false);
+  const [notesLoaded, setNotesLoaded] = useState(false);
 
-  const loading = !tasksLoaded || !projectsLoaded;
+  const loading = !tasksLoaded || !projectsLoaded || !notesLoaded;
 
   useEffect(() => {
-    if (!user?.uid) return;
+    if (!user?.uid) {
+      setTasks([]);
+      setProjects([]);
+      setNotes([]);
+      setTasksLoaded(true);
+      setProjectsLoaded(true);
+      setNotesLoaded(true);
+      return;
+    }
 
     const tasksQuery = query(
       collection(db, "tasks"),
@@ -106,31 +117,71 @@ export default function HomeScreen({ theme }) {
       where("userId", "==", user.uid)
     );
 
-    const unsubscribeTasks = onSnapshot(tasksQuery, (snapshot) => {
-      const data = snapshot.docs
-        .map((document) => ({
+    const notesQuery = query(
+      collection(db, "notes"),
+      where("userId", "==", user.uid)
+    );
+
+    const unsubscribeTasks = onSnapshot(
+      tasksQuery,
+      (snapshot) => {
+        const data = snapshot.docs
+          .map((document) => ({
+            id: document.id,
+            ...document.data(),
+          }))
+          .sort(sortTasksLikeMainList);
+
+        setTasks(data);
+        setTasksLoaded(true);
+      },
+      (error) => {
+        console.error("Error cargando tareas:", error);
+        setTasks([]);
+        setTasksLoaded(true);
+      }
+    );
+
+    const unsubscribeProjects = onSnapshot(
+      projectsQuery,
+      (snapshot) => {
+        const data = snapshot.docs.map((document) => ({
           id: document.id,
           ...document.data(),
-        }))
-        .sort(sortTasksLikeMainList);
+        }));
 
-      setTasks(data);
-      setTasksLoaded(true);
-    });
+        setProjects(data);
+        setProjectsLoaded(true);
+      },
+      (error) => {
+        console.error("Error cargando proyectos:", error);
+        setProjects([]);
+        setProjectsLoaded(true);
+      }
+    );
 
-    const unsubscribeProjects = onSnapshot(projectsQuery, (snapshot) => {
-      const data = snapshot.docs.map((document) => ({
-        id: document.id,
-        ...document.data(),
-      }));
+    const unsubscribeNotes = onSnapshot(
+      notesQuery,
+      (snapshot) => {
+        const data = snapshot.docs.map((document) => ({
+          id: document.id,
+          ...document.data(),
+        }));
 
-      setProjects(data);
-      setProjectsLoaded(true);
-    });
+        setNotes(data);
+        setNotesLoaded(true);
+      },
+      (error) => {
+        console.error("Error cargando notas:", error);
+        setNotes([]);
+        setNotesLoaded(true);
+      }
+    );
 
     return () => {
       unsubscribeTasks();
       unsubscribeProjects();
+      unsubscribeNotes();
     };
   }, [user]);
 
@@ -159,13 +210,6 @@ export default function HomeScreen({ theme }) {
 
     const totalTasks = tasks.length;
 
-    const progressTotalTasks = tasks.filter(
-      (task) => task.status !== "pausada"
-    ).length;
-
-    const completedPercent =
-      progressTotalTasks > 0 ? completedTasks / progressTotalTasks : 0;
-
     const activeProjects = projects.filter(
       (project) => project.status === "activo"
     ).length;
@@ -179,12 +223,12 @@ export default function HomeScreen({ theme }) {
       inProgressTasks,
       completedTasks,
       totalTasks,
-      progressTotalTasks,
-      completedPercent,
       activeProjects,
       finishedProjects,
+      totalProjects: projects.length,
+      totalNotes: notes.length,
     };
-  }, [tasks, projects]);
+  }, [tasks, projects, notes]);
 
   const pendingTasks = useMemo(() => {
     return tasks.filter((task) => task.status === "pendiente").slice(0, 4);
@@ -218,7 +262,7 @@ export default function HomeScreen({ theme }) {
         </View>
 
         <Text style={[styles.subtitle, { color: theme.colors.secondary }]}>
-          Resumen rápido de tus tareas, proyectos y progreso general.
+          Resumen rápido de tus proyectos, tareas y notas.
         </Text>
       </View>
 
@@ -262,6 +306,23 @@ export default function HomeScreen({ theme }) {
 
               <View style={styles.heroStats}>
                 <HeroMiniStat
+                  label="Proyectos"
+                  value={stats.totalProjects}
+                  icon="folder-multiple-outline"
+                  color={theme.colors.primary}
+                  theme={theme}
+                />
+
+                <View
+                  style={[
+                    styles.heroDivider,
+                    {
+                      backgroundColor: theme.colors.borderSoft,
+                    },
+                  ]}
+                />
+
+                <HeroMiniStat
                   label="Tareas"
                   value={stats.totalTasks}
                   icon="format-list-checks"
@@ -279,9 +340,9 @@ export default function HomeScreen({ theme }) {
                 />
 
                 <HeroMiniStat
-                  label="Proyectos"
-                  value={projects.length}
-                  icon="folder-multiple-outline"
+                  label="Notas"
+                  value={stats.totalNotes}
+                  icon="note-text-outline"
                   color={theme.colors.primary}
                   theme={theme}
                 />
@@ -289,56 +350,33 @@ export default function HomeScreen({ theme }) {
             </View>
           </Card>
 
-          <View style={styles.sectionHeaderRow}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.secondary }]}>
-              Tareas
-            </Text>
+          <Text style={[styles.sectionTitle, { color: theme.colors.secondary }]}>
+            Proyectos
+          </Text>
 
-            <Text style={[styles.sectionMeta, { color: theme.colors.secondary }]}>
-              {Math.round(stats.completedPercent * 100)}% completado
-            </Text>
+          <View style={styles.projectGrid}>
+            <ProjectStatCard
+              title="Activos"
+              value={stats.activeProjects}
+              icon="folder-open-outline"
+              color={theme.colors.info}
+              softColor={theme.colors.infoSoft}
+              theme={theme}
+            />
+
+            <ProjectStatCard
+              title="Finalizados"
+              value={stats.finishedProjects}
+              icon="folder-check-outline"
+              color={theme.colors.success}
+              softColor={theme.colors.successSoft}
+              theme={theme}
+            />
           </View>
 
-          <Card
-            mode="contained"
-            style={[
-              styles.progressCard,
-              {
-                backgroundColor: theme.colors.surface,
-                borderColor: theme.colors.borderSoft,
-              },
-            ]}
-          >
-            <View style={styles.progressContent}>
-              <View style={styles.progressHeader}>
-                <Text
-                  style={[styles.progressLabel, { color: theme.colors.text }]}
-                >
-                  Progreso de tareas
-                </Text>
-
-                <Text
-                  style={[
-                    styles.progressValue,
-                    { color: theme.colors.secondary },
-                  ]}
-                >
-                  {stats.completedTasks}/{stats.progressTotalTasks}
-                </Text>
-              </View>
-
-              <ProgressBar
-                progress={stats.completedPercent}
-                color={theme.colors.primary}
-                style={[
-                  styles.progressBar,
-                  {
-                    backgroundColor: theme.colors.borderSoft,
-                  },
-                ]}
-              />
-            </View>
-          </Card>
+          <Text style={[styles.sectionTitle, { color: theme.colors.secondary }]}>
+            Tareas
+          </Text>
 
           <View style={styles.taskStatsRow}>
             <DashboardCard
@@ -363,30 +401,6 @@ export default function HomeScreen({ theme }) {
               title="Completadas"
               value={stats.completedTasks}
               icon="check-circle-outline"
-              color={theme.colors.success}
-              softColor={theme.colors.successSoft}
-              theme={theme}
-            />
-          </View>
-
-          <Text style={[styles.sectionTitle, { color: theme.colors.secondary }]}>
-            Proyectos
-          </Text>
-
-          <View style={styles.projectGrid}>
-            <ProjectStatCard
-              title="Activos"
-              value={stats.activeProjects}
-              icon="folder-open-outline"
-              color={theme.colors.info}
-              softColor={theme.colors.infoSoft}
-              theme={theme}
-            />
-
-            <ProjectStatCard
-              title="Finalizados"
-              value={stats.finishedProjects}
-              icon="folder-check-outline"
               color={theme.colors.success}
               softColor={theme.colors.successSoft}
               theme={theme}
@@ -813,81 +827,34 @@ function HomeSkeleton({ theme }) {
                 ]}
               />
             </View>
-          </View>
-        </View>
-      </Card>
-
-      <View style={styles.sectionHeaderRow}>
-        <View
-          style={[
-            styles.skeletonSectionTitle,
-            { backgroundColor: skeletonColor },
-          ]}
-        />
-
-        <View
-          style={[
-            styles.skeletonSectionMeta,
-            { backgroundColor: skeletonColor },
-          ]}
-        />
-      </View>
-
-      <Card
-        mode="contained"
-        style={[
-          styles.progressCard,
-          {
-            backgroundColor: theme.colors.surface,
-            borderColor: theme.colors.borderSoft,
-          },
-        ]}
-      >
-        <View style={styles.progressContent}>
-          <View style={styles.progressHeader}>
-            <View
-              style={[
-                styles.skeletonProgressTitle,
-                { backgroundColor: skeletonColor },
-              ]}
-            />
 
             <View
               style={[
-                styles.skeletonProgressValue,
-                { backgroundColor: skeletonColor },
+                styles.heroDivider,
+                {
+                  backgroundColor: theme.colors.borderSoft,
+                },
               ]}
             />
-          </View>
 
-          <View
-            style={[
-              styles.skeletonProgressBar,
-              { backgroundColor: skeletonStrongColor },
-            ]}
-          />
+            <View style={styles.heroMiniStat}>
+              <View
+                style={[
+                  styles.skeletonNumber,
+                  { backgroundColor: skeletonStrongColor },
+                ]}
+              />
+
+              <View
+                style={[
+                  styles.skeletonLabel,
+                  { backgroundColor: skeletonColor },
+                ]}
+              />
+            </View>
+          </View>
         </View>
       </Card>
-
-      <View style={styles.taskStatsRow}>
-        <SkeletonSmallCard
-          skeletonColor={skeletonColor}
-          skeletonStrongColor={skeletonStrongColor}
-          theme={theme}
-        />
-
-        <SkeletonSmallCard
-          skeletonColor={skeletonColor}
-          skeletonStrongColor={skeletonStrongColor}
-          theme={theme}
-        />
-
-        <SkeletonSmallCard
-          skeletonColor={skeletonColor}
-          skeletonStrongColor={skeletonStrongColor}
-          theme={theme}
-        />
-      </View>
 
       <View
         style={[
@@ -908,6 +875,26 @@ function HomeSkeleton({ theme }) {
         />
 
         <SkeletonProjectCard
+          skeletonColor={skeletonColor}
+          skeletonStrongColor={skeletonStrongColor}
+          theme={theme}
+        />
+      </View>
+
+      <View style={styles.taskStatsRow}>
+        <SkeletonSmallCard
+          skeletonColor={skeletonColor}
+          skeletonStrongColor={skeletonStrongColor}
+          theme={theme}
+        />
+
+        <SkeletonSmallCard
+          skeletonColor={skeletonColor}
+          skeletonStrongColor={skeletonStrongColor}
+          theme={theme}
+        />
+
+        <SkeletonSmallCard
           skeletonColor={skeletonColor}
           skeletonStrongColor={skeletonStrongColor}
           theme={theme}
@@ -1229,15 +1216,7 @@ const styles = StyleSheet.create({
   heroDivider: {
     width: 1,
     height: responsive(38, 50),
-    marginHorizontal: responsive(18, 28),
-  },
-
-  sectionHeaderRow: {
-    marginTop: responsive(2, 4),
-    marginBottom: responsive(10, 14),
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
+    marginHorizontal: responsive(12, 20),
   },
 
   sectionTitle: {
@@ -1247,46 +1226,6 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     letterSpacing: 0.5,
     textTransform: "uppercase",
-  },
-
-  sectionMeta: {
-    marginBottom: responsive(10, 14),
-    fontSize: responsive(12, 14),
-    fontWeight: "800",
-  },
-
-  progressCard: {
-    borderRadius: responsive(22, 28),
-    borderWidth: 1,
-    elevation: 0,
-    overflow: "hidden",
-    marginBottom: responsive(12, 18),
-  },
-
-  progressContent: {
-    padding: responsive(15, 22),
-  },
-
-  progressHeader: {
-    marginBottom: responsive(10, 14),
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-
-  progressLabel: {
-    fontSize: responsive(13, 16),
-    fontWeight: "800",
-  },
-
-  progressValue: {
-    fontSize: responsive(12.5, 15),
-    fontWeight: "800",
-  },
-
-  progressBar: {
-    height: responsive(8, 10),
-    borderRadius: 999,
   },
 
   taskStatsRow: {
@@ -1334,7 +1273,7 @@ const styles = StyleSheet.create({
   projectGrid: {
     flexDirection: "row",
     gap: responsive(12, 18),
-    marginBottom: responsive(12, 20),
+    marginBottom: responsive(18, 26),
   },
 
   projectCard: {
@@ -1539,23 +1478,6 @@ const styles = StyleSheet.create({
     height: responsive(13, 16),
     borderRadius: 999,
     marginBottom: responsive(10, 14),
-  },
-
-  skeletonProgressTitle: {
-    width: responsive(135, 170),
-    height: responsive(14, 17),
-    borderRadius: 999,
-  },
-
-  skeletonProgressValue: {
-    width: responsive(42, 56),
-    height: responsive(14, 17),
-    borderRadius: 999,
-  },
-
-  skeletonProgressBar: {
-    height: responsive(8, 10),
-    borderRadius: 999,
   },
 
   skeletonSmallIcon: {
