@@ -21,26 +21,15 @@ const responsive = (mobile, tablet) => {
   return IS_TABLET ? tablet : mobile;
 };
 
-//JS:
 //Assets:
 const logoLight = require("../../assets/logo-light.png");
 const logoDark = require("../../assets/logo-dark.png");
 
-const LOGO_ZOOM = responsive(3, 3.15);
-const LOGO_AREA_HEIGHT = responsive(208, 270);
-const LOGO_FRAME_WIDTH = responsive(255, 335);
-const LOGO_FRAME_HEIGHT = responsive(125, 165);
-
-const DARK_LOGIN_BACKGROUND = "#0a101f";
-const DARK_CARD_BACKGROUND = "#151D2E";
-const DARK_INPUT_BACKGROUND = "#080D18";
-const DARK_BORDER = "rgba(148, 163, 184, 0.22)";
-const DARK_INPUT_BORDER = "rgba(148, 163, 184, 0.18)";
-const LIGHT_LOGIN_BACKGROUND = "#F9F9F9";
-const LIGHT_CARD_BACKGROUND = "#FFFFFF";
-const LIGHT_INPUT_BACKGROUND = "#F3F5F8";
-const LIGHT_BORDER = "rgba(15, 23, 42, 0.1)";
-const LIGHT_INPUT_BORDER = "rgba(15, 23, 42, 0.12)";
+//JS:
+const LOGO_ZOOM = responsive(2.75, 2.95);
+const LOGO_AREA_HEIGHT = responsive(214, 278);
+const LOGO_FRAME_WIDTH = responsive(255, 340);
+const LOGO_FRAME_HEIGHT = responsive(132, 172);
 
 const hexToRgba = (hex, alpha = 1) => {
   const clean = String(hex || "").replace("#", "");
@@ -77,27 +66,23 @@ export default function LoginScreen({ theme }) {
   const isDark = !!theme.dark;
   const logoSource = isDark ? logoDark : logoLight;
 
-  const screenBackground = isDark
-    ? DARK_LOGIN_BACKGROUND
-    : LIGHT_LOGIN_BACKGROUND;
-
-  const cardBackground = isDark ? DARK_CARD_BACKGROUND : LIGHT_CARD_BACKGROUND;
+  const screenBackground = theme.colors.background;
+  const cardBackground = theme.colors.surface;
 
   const inputBackground = isDark
-    ? DARK_INPUT_BACKGROUND
-    : LIGHT_INPUT_BACKGROUND;
+    ? theme.colors.background
+    : theme.colors.surfaceSoft || theme.colors.surface;
 
-  const borderColor = isDark ? DARK_BORDER : LIGHT_BORDER;
+  const borderColor = theme.colors.borderSoft || theme.colors.outline;
+  const inputBorderColor = theme.colors.borderSoft || theme.colors.outline;
+  const textColor = theme.colors.text;
+  const secondaryTextColor = theme.colors.secondary;
+  const primaryColor = theme.colors.primary;
 
-  const inputBorderColor = isDark ? DARK_INPUT_BORDER : LIGHT_INPUT_BORDER;
+  const iconBoxBackground =
+    theme.colors.primarySoft || hexToRgba(primaryColor, isDark ? 0.18 : 0.1);
 
-  const subtitleColor = isDark ? "#AAB4C8" : "#64748B";
-  const textColor = isDark ? "#F8FAFC" : "#0F172A";
-  const secondaryTextColor = isDark ? "#A7B0C2" : "#64748B";
-
-  const iconBoxBackground = isDark
-    ? "rgba(37, 99, 235, 0.18)"
-    : "rgba(37, 99, 235, 0.1)";
+  const cardShadowColor = isDark ? "#000000" : "#0F172A";
 
   function handleInputFocus() {
     setTimeout(() => {
@@ -131,16 +116,14 @@ export default function LoginScreen({ theme }) {
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
     >
+
       <ScrollView
         ref={scrollRef}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[
-          styles.scrollContent,
-          { backgroundColor: screenBackground },
-        ]}
+        contentContainerStyle={styles.scrollContent}
       >
-        <View style={[styles.content, { backgroundColor: screenBackground }]}>
+        <View style={styles.content}>
           <View style={[styles.logoArea, { height: LOGO_AREA_HEIGHT }]}>
             <View
               style={[
@@ -148,7 +131,6 @@ export default function LoginScreen({ theme }) {
                 {
                   width: LOGO_FRAME_WIDTH,
                   height: LOGO_FRAME_HEIGHT,
-                  backgroundColor: screenBackground,
                 },
               ]}
             >
@@ -164,7 +146,7 @@ export default function LoginScreen({ theme }) {
               />
             </View>
 
-            <Text style={[styles.subtitle, { color: subtitleColor }]}>
+            <Text style={[styles.subtitle, { color: secondaryTextColor }]}>
               Organizá tus proyectos, tareas, pagos y accesos en un solo lugar.
             </Text>
           </View>
@@ -176,6 +158,7 @@ export default function LoginScreen({ theme }) {
               {
                 backgroundColor: cardBackground,
                 borderColor,
+                shadowColor: cardShadowColor,
               },
             ]}
           >
@@ -192,7 +175,7 @@ export default function LoginScreen({ theme }) {
                   <MaterialCommunityIcons
                     name="login-variant"
                     size={responsive(22, 29)}
-                    color={theme.colors.primary}
+                    color={primaryColor}
                   />
                 </View>
 
@@ -234,7 +217,7 @@ export default function LoginScreen({ theme }) {
                 ]}
                 textColor={textColor}
                 placeholderTextColor={secondaryTextColor}
-                activeOutlineColor={theme.colors.primary}
+                activeOutlineColor={primaryColor}
                 outlineColor={inputBorderColor}
                 left={
                   <TextInput.Icon
@@ -265,7 +248,7 @@ export default function LoginScreen({ theme }) {
                 ]}
                 textColor={textColor}
                 placeholderTextColor={secondaryTextColor}
-                activeOutlineColor={theme.colors.primary}
+                activeOutlineColor={primaryColor}
                 outlineColor={inputBorderColor}
                 left={
                   <TextInput.Icon
@@ -315,7 +298,7 @@ export default function LoginScreen({ theme }) {
                 loading={loading}
                 disabled={loading}
                 onPress={handleLogin}
-                buttonColor={theme.colors.primary}
+                buttonColor={primaryColor}
                 textColor="#FFFFFF"
                 style={styles.button}
                 contentStyle={styles.buttonContent}
@@ -338,6 +321,7 @@ export default function LoginScreen({ theme }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    overflow: "hidden",
   },
 
   scrollContent: {
@@ -374,7 +358,7 @@ const styles = StyleSheet.create({
   },
 
   subtitle: {
-    marginTop: responsive(40, 54),
+    marginTop: responsive(34, 48),
     maxWidth: responsive(315, 460),
     textAlign: "center",
     fontSize: responsive(13.5, 16),
@@ -388,13 +372,12 @@ const styles = StyleSheet.create({
     elevation: 0,
     overflow: "hidden",
 
-    shadowColor: "#0F172A",
     shadowOffset: {
       width: 0,
-      height: 10,
+      height: 14,
     },
-    shadowOpacity: 0.08,
-    shadowRadius: 22,
+    shadowOpacity: 0.1,
+    shadowRadius: 28,
   },
 
   cardContent: {

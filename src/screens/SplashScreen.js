@@ -7,7 +7,7 @@ import {
     Image,
     StyleSheet,
     View,
-    } from "react-native";
+} from "react-native";
 import { ActivityIndicator, Text } from "react-native-paper";
 
 //Responsive:
@@ -16,37 +16,17 @@ const IS_TABLET = width >= 768;
 
 const responsive = (mobile, tablet) => {
     return IS_TABLET ? tablet : mobile;
-    };
+};
 
-    //Assets:
-    const logoLight = require("../../assets/logo-light.png");
-    const logoDark = require("../../assets/logo-dark.png");
+//Assets:
+const logoLight = require("../../assets/logo-light.png");
+const logoDark = require("../../assets/logo-dark.png");
 
-    //Colores splash oscuro:
-    const DARK_SPLASH_BACKGROUND = "#0B111E";
-    const DARK_SPLASH_CARD = "#151D2E";
-    const DARK_SPLASH_PRIMARY = "#2563EB";
-    const DARK_SPLASH_SECONDARY = "#A7B0C2";
-    const DARK_SPLASH_BORDER = "rgba(148, 163, 184, 0.18)";
-    const DARK_GLOW_TOP = "rgba(37, 99, 235, 0.045)";
-    const DARK_GLOW_BOTTOM = "rgba(37, 99, 235, 0.035)";
-    const DARK_FOOTER = "rgba(167, 176, 194, 0.72)";
+//Config logo:
+const LOGO_ZOOM = responsive(3.2, 3.35);
+const CONTENT_OFFSET_Y = responsive(12, 18);
 
-    //Colores splash claro:
-    const LIGHT_SPLASH_BACKGROUND = "#F9F9F9";
-    const LIGHT_SPLASH_CARD = "#FFFFFF";
-    const LIGHT_SPLASH_PRIMARY = "#2563EB";
-    const LIGHT_SPLASH_SECONDARY = "#64748B";
-    const LIGHT_SPLASH_BORDER = "rgba(15, 23, 42, 0.1)";
-    const LIGHT_GLOW_TOP = "rgba(37, 99, 235, 0.055)";
-    const LIGHT_GLOW_BOTTOM = "rgba(37, 99, 235, 0.035)";
-    const LIGHT_FOOTER = "rgba(100, 116, 139, 0.82)";
-
-    //Config logo:
-    const LOGO_ZOOM = responsive(3.2, 3.35);
-    const CONTENT_OFFSET_Y = responsive(12, 18);
-
-    export default function SplashScreen({ theme }) {
+export default function SplashScreen({ theme }) {
     const fadeAnim = useRef(new Animated.Value(0)).current;
     const scaleAnim = useRef(new Animated.Value(0.92)).current;
     const translateAnim = useRef(new Animated.Value(10)).current;
@@ -55,21 +35,16 @@ const responsive = (mobile, tablet) => {
 
     const logoSource = isDark ? logoDark : logoLight;
 
-    const splashBackground = isDark
-        ? DARK_SPLASH_BACKGROUND
-        : LIGHT_SPLASH_BACKGROUND;
+    const splashBackground = theme?.colors?.background || "#0B111E";
+    const splashCard = theme?.colors?.surface || "#151D2E";
+    const splashPrimary = theme?.colors?.primary || "#2563EB";
+    const splashSecondary = theme?.colors?.secondary || "#A7B0C2";
+    const splashBorder =
+        theme?.colors?.borderSoft || theme?.colors?.outline || "rgba(148, 163, 184, 0.18)";
 
-    const splashCard = isDark ? DARK_SPLASH_CARD : LIGHT_SPLASH_CARD;
-    const splashPrimary = isDark ? DARK_SPLASH_PRIMARY : LIGHT_SPLASH_PRIMARY;
-
-    const splashSecondary = isDark
-        ? DARK_SPLASH_SECONDARY
-        : LIGHT_SPLASH_SECONDARY;
-
-    const splashBorder = isDark ? DARK_SPLASH_BORDER : LIGHT_SPLASH_BORDER;
-    const glowTop = isDark ? DARK_GLOW_TOP : LIGHT_GLOW_TOP;
-    const glowBottom = isDark ? DARK_GLOW_BOTTOM : LIGHT_GLOW_BOTTOM;
-    const footerColor = isDark ? DARK_FOOTER : LIGHT_FOOTER;
+    const footerColor = isDark
+        ? "rgba(167, 176, 194, 0.72)"
+        : "rgba(100, 116, 139, 0.82)";
 
     useEffect(() => {
         Animated.parallel([
@@ -98,9 +73,6 @@ const responsive = (mobile, tablet) => {
 
     return (
         <View style={[styles.container, { backgroundColor: splashBackground }]}>
-        <View style={[styles.topGlow, { backgroundColor: glowTop }]} />
-        <View style={[styles.bottomGlow, { backgroundColor: glowBottom }]} />
-
         <Animated.View
             style={[
             styles.content,
@@ -113,14 +85,7 @@ const responsive = (mobile, tablet) => {
             },
             ]}
         >
-            <View
-            style={[
-                styles.logoWrap,
-                {
-                backgroundColor: splashBackground,
-                },
-            ]}
-            >
+            <View style={styles.logoWrap}>
             <Image
                 source={logoSource}
                 style={[
@@ -167,24 +132,6 @@ const responsive = (mobile, tablet) => {
         alignItems: "center",
         justifyContent: "center",
         paddingHorizontal: responsive(28, 42),
-    },
-
-    topGlow: {
-        position: "absolute",
-        top: responsive(-135, -185),
-        right: responsive(-125, -170),
-        width: responsive(285, 390),
-        height: responsive(285, 390),
-        borderRadius: 999,
-    },
-
-    bottomGlow: {
-        position: "absolute",
-        bottom: responsive(-155, -210),
-        left: responsive(-140, -190),
-        width: responsive(305, 430),
-        height: responsive(305, 430),
-        borderRadius: 999,
     },
 
     content: {
