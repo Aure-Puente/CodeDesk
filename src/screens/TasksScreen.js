@@ -35,11 +35,6 @@ import {
 } from "firebase/firestore";
 import { db } from "../firebase/firebaseConfig";
 import { useAuth } from "../context/AuthContext";
-import {
-  cancelTaskReminderNotification,
-  scheduleTaskReminderNotification,
-} from "../services/notifications";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 
 //Responsive:
 const { width } = Dimensions.get("window");
@@ -51,9 +46,6 @@ const responsive = (mobile, tablet) => {
 
 //JS:
 const STATUSES = ["pendiente", "en progreso", "completada", "pausada"];
-const NOTIFICATIONS_ENABLED_KEY = "codedesk_notifications_enabled";
-const NOTIFICATION_TIME_KEY = "codedesk_notification_time";
-const TASK_REMINDER_SIGNATURE_KEY = "codedesk_task_reminder_signature";
 
 const STATUS_ICONS = {
   pendiente: "clock-outline",
@@ -248,87 +240,6 @@ export default function TasksScreen({ theme }) {
       unsubscribeTasks();
     };
   }, [user]);
-
-    useEffect(() => {
-    async function syncTaskReminderNotification() {
-      try {
-        if (!user?.uid || loading) {
-          return;
-        }
-
-        const storedEnabled = await AsyncStorage.getItem(
-          NOTIFICATIONS_ENABLED_KEY
-        );
-
-        const storedTime = await AsyncStorage.getItem(NOTIFICATION_TIME_KEY);
-
-        const notificationsEnabled =
-          storedEnabled === null ? true : storedEnabled === "true";
-
-        const notificationTime = storedTime || "10:00";
-
-        if (!notificationsEnabled) {
-          await cancelTaskReminderNotification();
-          await AsyncStorage.removeItem(TASK_REMINDER_SIGNATURE_KEY);
-          return;
-        }
-
-        const [hourText, minuteText] = notificationTime.split(":");
-
-        const hour = Number(hourText);
-        const minute = Number(minuteText);
-
-        const validTime =
-          !Number.isNaN(hour) &&
-          !Number.isNaN(minute) &&
-          hour >= 0 &&
-          hour <= 23 &&
-          minute >= 0 &&
-          minute <= 59;
-
-        if (!validTime) {
-          return;
-        }
-
-        const firstTaskToNotify = tasks.find(
-          (task) => task.status !== "completada"
-        );
-
-        if (!firstTaskToNotify) {
-          await cancelTaskReminderNotification();
-          await AsyncStorage.removeItem(TASK_REMINDER_SIGNATURE_KEY);
-          return;
-        }
-
-        const reminderSignature = `${user.uid}-${firstTaskToNotify.id}-${
-          firstTaskToNotify.updatedAt?.seconds || ""
-        }-${notificationTime}`;
-
-        const lastReminderSignature = await AsyncStorage.getItem(
-          TASK_REMINDER_SIGNATURE_KEY
-        );
-
-        if (lastReminderSignature === reminderSignature) {
-          return;
-        }
-
-        await scheduleTaskReminderNotification({
-          task: firstTaskToNotify,
-          hour,
-          minute,
-        });
-
-        await AsyncStorage.setItem(
-          TASK_REMINDER_SIGNATURE_KEY,
-          reminderSignature
-        );
-      } catch (error) {
-        console.log("Error sincronizando notificación de tarea:", error);
-      }
-    }
-
-    syncTaskReminderNotification();
-  }, [tasks, loading, user?.uid]);
 
   const selectedProject = useMemo(() => {
     return projects.find((project) => project.id === projectId) || null;

@@ -19,7 +19,6 @@ import CredentialsScreen from "../screens/CredentialsScreen";
 import DataBaseScreen from "../screens/DataBaseScreen";
 import NotesScreen from "../screens/NotesScreen";
 import StatsScreen from "../screens/StatsScreen";
-import ProfileScreen from "../screens/ProfileScreen";
 
 //JS:
 const Tab = createBottomTabNavigator();
@@ -204,7 +203,14 @@ function MoreStack({ theme, isDarkMode, setIsDarkMode }) {
       }}
     >
       <Stack.Screen name="MasHome">
-        {(props) => <MoreScreen {...props} theme={theme} />}
+        {(props) => (
+          <MoreScreen
+            {...props}
+            theme={theme}
+            isDarkMode={isDarkMode}
+            setIsDarkMode={setIsDarkMode}
+          />
+        )}
       </Stack.Screen>
 
       <Stack.Screen name="Credenciales">
@@ -221,17 +227,6 @@ function MoreStack({ theme, isDarkMode, setIsDarkMode }) {
 
       <Stack.Screen name="Estadisticas">
         {(props) => <StatsScreen {...props} theme={theme} />}
-      </Stack.Screen>
-
-      <Stack.Screen name="Configuracion">
-        {(props) => (
-          <ProfileScreen
-            {...props}
-            theme={theme}
-            isDarkMode={isDarkMode}
-            setIsDarkMode={setIsDarkMode}
-          />
-        )}
       </Stack.Screen>
     </Stack.Navigator>
   );
